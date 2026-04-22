@@ -338,7 +338,7 @@
     const nome = document.getElementById('input-nome').value.trim();
     if (!nome) return;
     try {
-      await fetch('http://127.0.0.1:5000/identificar', {
+      await fetch('https://chatbot-defensoria.onrender.com/identificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: SESSION_ID, nome })
@@ -361,7 +361,7 @@
     mostrarDigitando();
 
     try {
-      const r = await fetch('http://127.0.0.1:5000/chat', {
+      const r = await fetch('https://chatbot-defensoria.onrender.com/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mensagem, session_id: SESSION_ID })

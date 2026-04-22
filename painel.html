@@ -288,7 +288,7 @@
 
   async function carregarSessoes() {
     try {
-      const r = await fetch('http://127.0.0.1:5000/sessoes');
+      const r = await fetch('https://chatbot-defensoria.onrender.com/sessoes');
       const data = await r.json();
       sessoesConhecidas = data.sessoes || {};
       renderizarSessoes();
@@ -338,7 +338,7 @@
 
   async function verHistorico(session_id) {
     try {
-      const r = await fetch(`http://127.0.0.1:5000/historico/${session_id}`);
+      const r = await fetch(`https://chatbot-defensoria.onrender.com/historico/${session_id}`);
       const data = await r.json();
       document.getElementById('sem-sessao').style.display = 'none';
       document.getElementById('historico-msgs').style.display = 'block';
