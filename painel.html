@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel da Defensoria</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f0f0f0; }
+
+  #login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #1a3a6b;
+  }
+  #login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    width: 340px;
+    text-align: center;
+  }
+  #login-box h2 { color: #1a3a6b; margin-bottom: 8px; }
+  #login-box p { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+  #login-box input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  #login-box button {
+    width: 100%;
+    padding: 12px;
+    background: #1a3a6b;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  #erro-login { color: #c0392b; font-size: 0.85rem; margin-top: 8px; }
+
+  #painel-screen { display: none; }
+  header {
+    background: #1a3a6b;
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 1.1rem; }
+  #header-right { display: flex; gap: 8px; align-items: center; }
+  #btn-logout {
+    background: #c0392b;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #btn-filtro-real {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.5);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #btn-filtro-real.ativo {
+    background: #c0392b;
+    border-color: #c0392b;
+  }
+
+  #conteudo {
+    display: flex;
+    height: calc(100vh - 54px);
+  }
+
+  #lista-sessoes {
+    width: 300px;
+    background: white;
+    border-right: 1px solid #ddd;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  #lista-header {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+  #lista-header h3 { color: #1a3a6b; margin-bottom: 8px; font-size: 0.95rem; }
+  #btn-atualizar {
+    background: #1a3a6b;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    width: 100%;
+  }
+  #sessoes-lista { padding: 8px; flex: 1; }
+
+  .sessao-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    border: 1px solid #eee;
+    font-size: 0.85rem;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .sessao-item:hover { background: #f0f4ff; }
+  .sessao-item.real {
+    border-left: 4px solid #c0392b;
+    background: #fff5f5;
+  }
+  .sessao-item.fachada { border-left: 4px solid #1a3a6b; }
+
+  .badge-alerta {
+    display: inline-block;
+    background: #c0392b;
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    animation: pulsar 1.5s infinite;
+  }
+  @keyframes pulsar {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .sessao-timestamp {
+    font-size: 0.72rem;
+    color: #999;
+    margin-top: 3px;
+  }
+
+  #detalhe-sessao {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #f9f9f9;
+  }
+
+  #sem-sessao {
+    color: #999;
+    text-align: center;
+    margin-top: 60px;
+    font-size: 0.95rem;
+  }
+
+  #historico-msgs { display: none; }
+  #titulo-sessao {
+    color: #1a3a6b;
+    margin-bottom: 16px;
+    font-size: 1rem;
+  }
+
+  .msg-painel {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+  .msg-painel.user {
+    background: #1a3a6b;
+    color: white;
+    margin-left: auto;
+  }
+  .msg-painel.assistant {
+    background: white;
+    color: #333;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .msg-timestamp {
+    font-size: 0.7rem;
+    color: #999;
+    text-align: right;
+    margin-bottom: 12px;
+    margin-top: -4px;
+  }
+
+  .separador-modo {
+    text-align: center;
+    margin: 12px 0;
+    font-size: 0.8rem;
+    color: #c0392b;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .separador-modo::before, .separador-modo::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #c0392b;
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div id="login-box">
+    <h2> Defensoria do Pará</h2>
+    <p>Painel de Monitoramento</p>
+    <input id="usuario" type="text" placeholder="Usuário">
+    <input id="senha" type="password" placeholder="Senha">
+    <button onclick="login()">Entrar</button>
+    <div id="erro-login"></div>
+  </div>
+</div>
+
+<div id="painel-screen">
+  <header>
+    <h1>🛡️ Painel da Defensoria — Monitoramento de Atendimentos</h1>
+    <div id="header-right">
+      <button id="btn-filtro-real" onclick="toggleFiltro()">⚠️ Só alertas</button>
+      <button id="btn-logout" onclick="logout()">Sair</button>
+    </div>
+  </header>
+  <div id="conteudo">
+    <div id="lista-sessoes">
+      <div id="lista-header">
+        <h3>Sessões ativas</h3>
+        <button id="btn-atualizar" onclick="carregarSessoes()">↻ Atualizar</button>
+      </div>
+      <div id="sessoes-lista"></div>
+    </div>
+    <div id="detalhe-sessao">
+      <div id="sem-sessao">Selecione uma sessão para ver o histórico</div>
+      <div id="historico-msgs">
+        <h3 id="titulo-sessao"></h3>
+        <div id="msgs-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const USUARIO = 'defensoria';
+  const SENHA = 'para2024';
+  let sessoesConhecidas = {};
+  let filtroReal = false;
+
+  function login() {
+    const u = document.getElementById('usuario').value;
+    const s = document.getElementById('senha').value;
+    if (u === USUARIO && s === SENHA) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('painel-screen').style.display = 'block';
+      carregarSessoes();
+    } else {
+      document.getElementById('erro-login').textContent = 'Usuário ou senha incorretos.';
+    }
+  }
+
+  function logout() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('painel-screen').style.display = 'none';
+    document.getElementById('usuario').value = '';
+    document.getElementById('senha').value = '';
+  }
+
+  function toggleFiltro() {
+    filtroReal = !filtroReal;
+    const btn = document.getElementById('btn-filtro-real');
+    btn.classList.toggle('ativo', filtroReal);
+    renderizarSessoes();
+  }
+
+  async function carregarSessoes() {
+    try {
+      const r = await fetch('http://127.0.0.1:5000/sessoes');
+      const data = await r.json();
+      sessoesConhecidas = data.sessoes || {};
+      renderizarSessoes();
+    } catch(e) {
+      document.getElementById('sessoes-lista').innerHTML = '<p style="color:#999;font-size:0.85rem;padding:8px">Erro ao carregar sessões.</p>';
+    }
+  }
+
+  function renderizarSessoes() {
+    const container = document.getElementById('sessoes-lista');
+    let ids = Object.keys(sessoesConhecidas);
+
+    // Filtrar se necessário
+    if (filtroReal) {
+      ids = ids.filter(id => sessoesConhecidas[id].modo_detectado === 'real');
+    }
+
+    // Ordenar: alertas primeiro
+    ids.sort((a, b) => {
+      const ma = sessoesConhecidas[a].modo_detectado === 'real' ? 0 : 1;
+      const mb = sessoesConhecidas[b].modo_detectado === 'real' ? 0 : 1;
+      return ma - mb;
+    });
+
+    if (ids.length === 0) {
+      container.innerHTML = '<p style="color:#999;font-size:0.85rem;padding:8px">Nenhuma sessão encontrada.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    ids.forEach(id => {
+      const info = sessoesConhecidas[id];
+      const isReal = info.modo_detectado === 'real';
+      const div = document.createElement('div');
+      div.className = 'sessao-item ' + (isReal ? 'real' : 'fachada');
+      div.innerHTML = `
+        <div>
+          <strong>${info.nome ? info.nome : 'Sessão ' + id.substr(0,8)}</strong>
+          ${isReal ? '<span class="badge-alerta">⚠️ ALERTA</span>' : ''}
+        </div>
+        <div class="sessao-timestamp">${info.total_msgs} mensagens · ${info.ultima_msg || ''}</div>
+      `;
+      div.onclick = () => verHistorico(id);
+      container.appendChild(div);
+    });
+  }
+
+  async function verHistorico(session_id) {
+    try {
+      const r = await fetch(`http://127.0.0.1:5000/historico/${session_id}`);
+      const data = await r.json();
+      document.getElementById('sem-sessao').style.display = 'none';
+      document.getElementById('historico-msgs').style.display = 'block';
+      document.getElementById('titulo-sessao').textContent = `Sessão: ${session_id}`;
+      const container = document.getElementById('msgs-container');
+      container.innerHTML = '';
+
+      let modoAnterior = 'fachada';
+      data.historico.forEach(msg => {
+        // Detectar mudança de modo
+        if (msg.role === 'user') {
+          const modoAtual = detectarModoLocal(msg.mensagem);
+          if (modoAtual === 'real' && modoAnterior === 'fachada') {
+            const sep = document.createElement('div');
+            sep.className = 'separador-modo';
+            sep.textContent = '⚠️ Modo de proteção ativado';
+            container.appendChild(sep);
+            modoAnterior = 'real';
+          }
+        }
+
+        const wrap = document.createElement('div');
+        const bolha = document.createElement('div');
+        bolha.className = 'msg-painel ' + msg.role;
+        bolha.textContent = msg.mensagem;
+        const ts = document.createElement('div');
+        ts.className = 'msg-timestamp';
+        ts.textContent = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '';
+        wrap.appendChild(bolha);
+        wrap.appendChild(ts);
+        container.appendChild(wrap);
+      });
+
+      container.scrollTop = 999999;
+    } catch(e) {
+      alert('Erro ao carregar histórico.');
+    }
+  }
+
+  function detectarModoLocal(mensagem) {
+    const palavras = ['violencia','medo','ajuda','agressao','marido','ameaca',
+      'delegacia','machucou','bater','controlar','socorro','fugir','protetiva',
+      'presa','trancada','agredida','perigo','ferida','machucada'];
+    const lower = mensagem.toLowerCase();
+    return palavras.some(p => lower.includes(p)) ? 'real' : 'fachada';
+  }
+</script>
+</body>
+</html>

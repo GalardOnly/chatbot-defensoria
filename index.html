@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dicas de Casa Fortaleza</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    transition: background 0.3s, color 0.3s;
+  }
+  body.dark {
+    background: #1a1a1a;
+    color: #eee;
+  }
+
+  header {
+    background: #1a3a6b;
+    color: white;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 1rem; }
+  header span { font-size: 0.75rem; opacity: 0.8; }
+
+  #header-btns { display: flex; gap: 8px; align-items: center; }
+
+  #btn-dark {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.4);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  #btn-saida {
+    background: #c0392b;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: bold;
+  }
+
+  #chat-container {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px);
+  }
+
+  #mensagens {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bolha-wrap {
+    display: flex;
+    flex-direction: column;
+  }
+  .bolha-wrap.usuario { align-items: flex-end; }
+  .bolha-wrap.assistente { align-items: flex-start; }
+
+  .bolha {
+    max-width: 80%;
+    padding: 8px 12px;
+    border-radius: 18px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+  .bolha.usuario {
+    background: #1a3a6b;
+    color: white;
+    border-bottom-right-radius: 4px;
+  }
+  .bolha.assistente {
+    background: white;
+    color: #222;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+  body.dark .bolha.assistente {
+    background: #2a2a2a;
+    color: #eee;
+  }
+
+  .horario {
+    font-size: 0.7rem;
+    color: #999;
+    margin-top: 2px;
+    padding: 0 4px;
+  }
+
+  .digitando {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 18px;
+    border-bottom-left-radius: 4px;
+    width: fit-content;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+  body.dark .digitando { background: #2a2a2a; }
+  .digitando span {
+    width: 7px; height: 7px;
+    background: #999;
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .digitando span:nth-child(2) { animation-delay: 0.2s; }
+  .digitando span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  #input-area {
+    display: flex;
+    padding: 10px;
+    gap: 8px;
+    background: white;
+    border-top: 1px solid #eee;
+  }
+  body.dark #input-area {
+    background: #222;
+    border-top-color: #333;
+  }
+  #input-msg {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 24px;
+    font-size: 0.92rem;
+    outline: none;
+    background: #f9f9f9;
+  }
+  body.dark #input-msg {
+    background: #333;
+    border-color: #444;
+    color: #eee;
+  }
+  #btn-enviar {
+    background: #1a3a6b;
+    color: white;
+    border: none;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #modal-consentimento {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  #modal-consentimento.visivel { display: flex; }
+  #modal-box {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+  }
+  body.dark #modal-box { background: #2a2a2a; color: #eee; }
+  #modal-box h3 { color: #1a3a6b; margin-bottom: 12px; font-size: 1rem; }
+  body.dark #modal-box h3 { color: #7a9fd4; }
+  #modal-box p { font-size: 0.88rem; line-height: 1.5; color: #555; margin-bottom: 16px; }
+  body.dark #modal-box p { color: #bbb; }
+  #modal-box input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    margin-bottom: 12px;
+    display: none;
+  }
+  body.dark #modal-box input { background: #333; border-color: #444; color: #eee; }
+  #modal-box input.visivel { display: block; }
+  .modal-btns { display: flex; flex-direction: column; gap: 8px; }
+  .btn-aceitar {
+    background: #1a3a6b;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.92rem;
+  }
+  .btn-anonima {
+    background: transparent;
+    color: #999;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+
+  @media (max-width: 600px) {
+    #chat-container { max-width: 100%; }
+    header h1 { font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏠 Dicas de Casa Fortaleza</h1>
+    <span>Seu assistente para o lar</span>
+  </div>
+  <div id="header-btns">
+    <button id="btn-dark" onclick="toggleDark()">🌙</button>
+    <button id="btn-saida" onclick="saidaRapida()">✕ Sair</button>
+  </div>
+</header>
+
+<div id="chat-container">
+  <div id="mensagens">
+    <div class="bolha-wrap assistente">
+      <div class="bolha assistente">Olá! Bem-vinda ao Dicas de Casa Fortaleza 🏠 Como posso te ajudar hoje?</div>
+      <span class="horario" id="hora-inicial"></span>
+    </div>
+  </div>
+  <div id="input-area">
+    <input id="input-msg" type="text"
+           placeholder="Digite sua mensagem..."
+           autocomplete="off"
+           autocorrect="off"
+           autocapitalize="off"
+           spellcheck="false"
+           onkeypress="if(event.key==='Enter') enviar()">
+    <button id="btn-enviar" onclick="enviar()">➤</button>
+  </div>
+</div>
+
+<div id="modal-consentimento">
+  <div id="modal-box">
+    <h3>🔒 Seus dados estão protegidos</h3>
+    <p>Para acompanharmos seu caso e garantir ajuda contínua, podemos registrar seu nome. Seus dados são sigilosos, usados apenas pela Defensoria Pública do Pará e podem ser apagados a qualquer momento.</p>
+    <input id="input-nome" type="text" placeholder="Digite seu nome (opcional)"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="modal-btns">
+      <button class="btn-aceitar" id="btn-aceitar-consentimento" onclick="mostrarCampoNome()">Aceito — quero me identificar</button>
+      <button class="btn-aceitar" id="btn-confirmar-nome" style="display:none" onclick="confirmarNome()">Confirmar</button>
+      <button class="btn-anonima" onclick="fecharModal()">Prefiro continuar anônima</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SESSION_ID = Math.random().toString(36).substr(2, 9);
+  document.getElementById('hora-inicial').textContent = horaAtual();
+  let modoAtual = 'fachada';
+  let consentimentoMostrado = false;
+
+  function horaAtual() {
+    return new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function saidaRapida() {
+    window.location.replace('https://g1.globo.com');
+  }
+
+  function toggleDark() {
+    document.body.classList.toggle('dark');
+    const btn = document.getElementById('btn-dark');
+    btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  }
+
+  function adicionarBolha(texto, tipo) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bolha-wrap ' + tipo;
+    const bolha = document.createElement('div');
+    bolha.className = 'bolha ' + tipo;
+    bolha.textContent = texto;
+    const hora = document.createElement('span');
+    hora.className = 'horario';
+    hora.textContent = horaAtual();
+    wrap.appendChild(bolha);
+    wrap.appendChild(hora);
+    document.getElementById('mensagens').appendChild(wrap);
+    document.getElementById('mensagens').scrollTop = 999999;
+    return bolha;
+  }
+
+  function mostrarDigitando() {
+    const wrap = document.createElement('div');
+    wrap.className = 'bolha-wrap assistente';
+    wrap.id = 'digitando-wrap';
+    wrap.innerHTML = '<div class="digitando"><span></span><span></span><span></span></div>';
+    document.getElementById('mensagens').appendChild(wrap);
+    document.getElementById('mensagens').scrollTop = 999999;
+  }
+
+  function removerDigitando() {
+    const el = document.getElementById('digitando-wrap');
+    if (el) el.remove();
+  }
+
+  function mostrarCampoNome() {
+    document.getElementById('input-nome').classList.add('visivel');
+    document.getElementById('btn-aceitar-consentimento').style.display = 'none';
+    document.getElementById('btn-confirmar-nome').style.display = 'block';
+    document.getElementById('input-nome').focus();
+  }
+
+  async function confirmarNome() {
+    const nome = document.getElementById('input-nome').value.trim();
+    if (!nome) return;
+    try {
+      await fetch('http://127.0.0.1:5000/identificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: SESSION_ID, nome })
+      });
+    } catch(e) {}
+    fecharModal();
+    adicionarBolha('Obrigada, ' + nome + '. Estou aqui para te ajudar.', 'assistente');
+  }
+
+  function fecharModal() {
+    document.getElementById('modal-consentimento').classList.remove('visivel');
+  }
+
+  async function enviar() {
+    const input = document.getElementById('input-msg');
+    const mensagem = input.value.trim();
+    if (!mensagem) return;
+    input.value = '';
+    adicionarBolha(mensagem, 'usuario');
+    mostrarDigitando();
+
+    try {
+      const r = await fetch('http://127.0.0.1:5000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensagem, session_id: SESSION_ID })
+      });
+      const data = await r.json();
+      removerDigitando();
+      adicionarBolha(data.resposta, 'assistente');
+
+      if (data.modo === 'real' && modoAtual === 'fachada' && !consentimentoMostrado) {
+        modoAtual = 'real';
+        consentimentoMostrado = true;
+        setTimeout(() => {
+          document.getElementById('modal-consentimento').classList.add('visivel');
+        }, 800);
+      }
+      if (data.modo === 'real') modoAtual = 'real';
+    } catch(e) {
+      removerDigitando();
+      adicionarBolha('Erro ao conectar. Tente novamente.', 'assistente');
+    }
+  }
+</script>
+</body>
+</html>

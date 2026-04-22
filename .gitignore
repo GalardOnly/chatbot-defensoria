@@ -1,0 +1,6 @@
+.env
+chroma_db/
+
+historico.db
+__pycache__/
+.venv/
