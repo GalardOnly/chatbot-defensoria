@@ -94,7 +94,17 @@ def chat():
     salvar_mensagem(session_id, 'user', mensagem)
     # Verifica se a sessão já teve modo real antes
     historico_sessao = carregar_historico(session_id)
-    teve_modo_real = any(detectar_modo(m['mensagem'], historico=historico_sessao) == 'real' 
+    historico_para_api = [{"role": m['role'], "content": m['mensagem']} for m in historico_sessao]
+    try:
+        resposta = responder_pergunta(
+        mensagem, 
+        embedding_service, 
+        colecao, 
+        historico=historico_para_api,
+        modo=modo
+    )
+    except Exception as e:
+        teve_modo_real = any(detectar_modo(m['mensagem'], historico=historico_sessao) == 'real' 
                      for m in historico_sessao 
                      if m['role'] == 'user')
 

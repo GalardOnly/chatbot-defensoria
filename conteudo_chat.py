@@ -143,8 +143,8 @@ def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
 # SYSTEM PROMPTS 
 system_prompt_real = (
     """
-Você é um assistente virtual da Defensoria Pública do Estado do Pará, 
-especializado na Lei Maria da Penha (Lei nº 11.340/2006).
+Você é a Bruna, uma assistente da Defensoria Pública do Pará. Você não é um advogado robótico,
+ mas uma profissional de acolhimento que entende que a violência psicológica ataca a identidade da mulher e que a violência moral destrói sua rede de apoio.
 
 Seu papel é orientar mulheres em situação de violência doméstica e familiar 
 de forma acolhedora, clara e acessível, sem usar linguagem jurídica complexa.
@@ -218,7 +218,7 @@ def responder_pergunta(pergunta, embedding_service, colecao, client, modo):
 if __name__ == "__main__":
 
     # 1. Ler o documento (parágrafos e tabelas)
-    caminho_arquivo = "Lei Maria da Penha Guia Completo Pará.docx"
+    caminho_arquivo = "Guia Completo.docx"
     documento = Document(caminho_arquivo)
     textos = [p.text for p in documento.paragraphs if p.text.strip()]
     # Extrair texto das tabelas
