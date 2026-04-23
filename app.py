@@ -1,5 +1,7 @@
 
 from flask import Flask, request, jsonify
+import threading
+import requests
 from flask_cors import CORS
 from conteudo_chat import responder_pergunta, EmbeddingService, buscar_chunks_relevantes
 import chromadb
@@ -185,4 +187,12 @@ def health():
 
 if __name__ == '__main__':
     init_db()
-    app.run(host='0.0.0.0', port=5000)
+
+def ping_health():
+    try:
+        url = os.getenv('RENDER_EXTERNAL_URL', 'http://127.0.0.1:5000')
+        requests.get(f'{url}/health', timeout=5)
+        print(f'Ping enviado para {url}/health')
+    except Exception as e:
+        print(f'Ping falhou: {e}')
+    threading.Timer(600, ping_health).start()
