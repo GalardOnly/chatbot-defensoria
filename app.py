@@ -205,15 +205,28 @@ def apagar(session_id):
 def health():
     return jsonify({'status': 'ok'})
 
-
-if __name__ == '__main__':
-    init_db()
-
+# A definição da função fica fora do bloco main (como você já fez)
 def ping_health():
     try:
-        url = os.getenv('RENDER_EXTERNAL_URL', 'http://127.0.0.1:5000')
-        requests.get(f'{url}/health', timeout=5)
-        print(f'Ping enviado para {url}/health')
+        # No Render, essa variável é preenchida automaticamente com a URL do seu site
+        url = os.getenv('RENDER_EXTERNAL_URL')
+        if url:
+            requests.get(f'{url}/health', timeout=5)
+            print(f'Ping enviado para {url}/health')
     except Exception as e:
         print(f'Ping falhou: {e}')
+    
+    # Agenda a próxima execução para daqui a 600 segundos (10 minutos)
     threading.Timer(600, ping_health).start()
+
+if __name__ == '__main__':
+    # 1. Prepara o banco de dados
+    init_db()
+
+    # 2. Gira a chave do motor (Chama a função a primeira vez)
+    # IMPORTANTE: Tem que ser ANTES do app.run
+    ping_health()
+
+    # 3. Inicia o servidor (O processo que fica "travado" ouvindo a web)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
