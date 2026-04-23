@@ -89,33 +89,44 @@ def chat():
     data = request.get_json()
     mensagem = data.get('mensagem', '')
     session_id = data.get('session_id', '')
+
     if not mensagem:
         return jsonify({'erro': 'Campo mensagem obrigatorio.'}), 400
+
+    # 1. Salva a mensagem do usuário
     salvar_mensagem(session_id, 'user', mensagem)
-    # Verifica se a sessão já teve modo real antes
+    
+    # 2. Carrega o histórico para análise
     historico_sessao = carregar_historico(session_id)
+    
+    # 3. Define o MODO primeiro (Lógica corrigida)
+    # Verifica se já houve modo real antes ou se a mensagem atual é real
+    teve_modo_real = any(m['role'] == 'user' and detectar_modo(m['mensagem'], historico=historico_sessao) == 'real' 
+                         for m in historico_sessao)
+    
+    modo = 'real' if teve_modo_real or detectar_modo(mensagem, historico=historico_sessao) == 'real' else 'fachada'
+
+    # 4. Prepara o histórico formatado para a IA
     historico_para_api = [{"role": m['role'], "content": m['mensagem']} for m in historico_sessao]
+
+    init_services()
+
+    # 5. Chama a função de resposta uma única vez com tudo o que ela precisa
     try:
         resposta = responder_pergunta(
-        mensagem, 
-        embedding_service, 
-        colecao, 
-        historico=historico_para_api,
-        modo=modo
-    )
+            pergunta=mensagem, 
+            embedding_service=embedding_service, 
+            colecao=colecao, 
+            historico=historico_para_api, # Aqui entra a memória
+            modo=modo
+        )
     except Exception as e:
-        teve_modo_real = any(detectar_modo(m['mensagem'], historico=historico_sessao) == 'real' 
-                     for m in historico_sessao 
-                     if m['role'] == 'user')
+        print(f'ERRO CRÍTICO NA RESPOSTA: {e}')
+        resposta = 'Serviço temporariamente indisponível. Tente novamente.'
 
-    modo = 'real' if teve_modo_real or detectar_modo(mensagem, historico=historico_sessao) == 'real' else 'fachada'
-    init_services()
-    try:
-        resposta = responder_pergunta(mensagem, embedding_service, colecao, client=None, modo=modo)
-    except Exception as e:
-        print(f'ERRO: {e}')
-        resposta = 'Servico temporariamente indisponivel. Tente novamente.'
+    # 6. Salva a resposta da Bruna
     salvar_mensagem(session_id, 'assistant', resposta)
+    
     return jsonify({'resposta': resposta, 'modo': modo})
 
 

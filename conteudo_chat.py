@@ -190,26 +190,29 @@ Se a pergunta fugir desses temas, oriente gentilmente a buscar um profissional e
 
 # FUNÇÃO PRINCIPAL DE RESPOSTA
 
-def responder_pergunta(pergunta, embedding_service, colecao, client, modo):
+def responder_pergunta(pergunta, embedding_service, colecao, historico=[], modo='real'):
     contexto = buscar_chunks_relevantes(pergunta, embedding_service, colecao)
     contexto_str = "\n".join(contexto)
-    if modo == 'real':
-        prompt = (
-            f"{system_prompt_real}\n\n"
-            f"Contexto extraído do documento:\n{contexto_str}\n\n"
-            f"Pergunta: {pergunta}\n\n"
-            f"Resposta:"
-        )
-    else:
-        prompt = (
-            f"{system_prompt_fachada}\n\n"
-            f"Pergunta: {pergunta}\n\n"
-            f"Resposta:"
-        )
+    
+    system_prompt = system_prompt_real if modo == 'real' else system_prompt_fachada
+    
+    # Montamos as mensagens enviando o histórico (memória)
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Pegamos as últimas mensagens para não estourar o limite de tokens
+    for msg in historico[-5:]:
+        messages.append(msg)
+        
+    # Adicionamos a pergunta atual com o contexto RAG
+    prompt_final = f"Contexto base: {contexto_str}\n\nPergunta atual: {pergunta}"
+    messages.append({"role": "user", "content": prompt_final})
+
     groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}]
+        messages=messages,
+        temperature=0.6, # <--- ISSO AQUI É O QUE TIRA O TOM DE ROBÔ
+        max_tokens=600
     )
     return response.choices[0].message.content
 
