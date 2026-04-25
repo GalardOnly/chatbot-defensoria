@@ -2,19 +2,17 @@ import os
 import time
 import pickle
 import numpy as np
-import torch
 import chromadb
 from groq import Groq
 from google import genai
 from google.genai import types
 from docx import Document
 from dotenv import load_dotenv
-from transformers import AutoTokenizer, AutoModel
 
-#VARIÁVEIS DE AMBIENTE
+# ── VARIÁVEIS DE AMBIENTE ────────────────────────────────────────────────────
 load_dotenv()
 
-#ESTRUTURAS DE DADOS
+# ── ESTRUTURAS DE DADOS ──────────────────────────────────────────────────────
 tipos_violencia = [
     {"tipo": "Violência física",      "exemplo": "Agressão, empurrão, tapa, soco, chute."},
     {"tipo": "Violência psicológica", "exemplo": "Ameaças, humilhações, xingamentos, isolamento."},
@@ -47,35 +45,21 @@ direitos_por_situacao = {
 }
 
 defensoria_contatos = {
-    "Belém":       {"endereco": "Rua XYZ, nº 123", "telefone": "(91) 1234-5678"},
-    "Ananindeua":  {"endereco": "Av. ABC, nº 456",  "telefone": "(91) 2345-6789"},
+    "Belém":      {"endereco": "Rua XYZ, nº 123", "telefone": "(91) 1234-5678"},
+    "Ananindeua": {"endereco": "Av. ABC, nº 456",  "telefone": "(91) 2345-6789"},
 }
 
 
-#PRÉ-CLASSIFICADOR (BERT + Random Forest)
-# Ponto de atenção 1: BERT carregado uma única vez (singleton via init_services)
-# Ponto de atenção 4: torch.inference_mode() no lugar de torch.no_grad()
-# Ponto de atenção 3: classe nao_violencia configurável
+# ── PRÉ-CLASSIFICADOR (TF-IDF + Random Forest) ──────────────────────────────
+# Substituímos o BERT (~450MB RAM) por TF-IDF (~5MB RAM).
+# O Pipeline salvo já inclui o vetorizador — basta chamar .predict(["texto"]).
 
 class ClassificadorViolencia:
     """
-    Wrapper em torno dos modelos treinados (rf_tipo + rf_gravidade) e do BERT
-    português. Deve ser instanciado UMA VEZ e reutilizado (como EmbeddingService).
-
-    Parâmetros
-    ----------
-    pasta_modelos : str
-        Caminho para a pasta que contém rf_tipo.pkl e rf_gravidade.pkl.
-    classe_neutra : str
-        Nome da classe que representa ausência de violência no seu dataset.
-        Padrão: "nao_violencia". Ajuste se usou outro nome (ex: "neutro").
-    limiar_confianca : float
-        Confiança mínima (0–1) para considerar a classificação válida.
-        Abaixo disso, eh_violencia retorna False para evitar falsos positivos
-        de baixa confiança forçarem o modo real.
+    Carrega os pipelines treinados (TF-IDF + RF) para tipo e gravidade.
+    Uso de memória: ~30-50 MB total (vs ~450 MB do BERT).
+    Compatível com o plano gratuito do Render (512 MB).
     """
-
-    MODEL_BERT = "neuralmind/bert-base-portuguese-cased"
 
     def __init__(
         self,
@@ -83,42 +67,19 @@ class ClassificadorViolencia:
         classe_neutra: str = "nao_violencia",
         limiar_confianca: float = 0.60,
     ):
-        self.classe_neutra     = classe_neutra
-        self.limiar_confianca  = limiar_confianca
+        self.classe_neutra    = classe_neutra
+        self.limiar_confianca = limiar_confianca
 
-        print("  [Classificador] Carregando BERT português...")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_BERT)
-        self.bert      = AutoModel.from_pretrained(self.MODEL_BERT)
-        self.device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.bert      = self.bert.to(self.device)
-        self.bert.eval()
-        print(f"  [Classificador] BERT pronto — dispositivo: {self.device}")
-
-        print("  [Classificador] Carregando Random Forests...")
+        print("  [Classificador] Carregando pipelines TF-IDF + RF...")
         with open(f"{pasta_modelos}/rf_tipo.pkl", "rb") as f:
-            self.rf_tipo = pickle.load(f)
+            self.pipeline_tipo = pickle.load(f)
         with open(f"{pasta_modelos}/rf_gravidade.pkl", "rb") as f:
-            self.rf_gravidade = pickle.load(f)
-        print("  [Classificador] Modelos prontos.")
-
-    # Ponto de atenção 4: inference_mode (mais rápido que no_grad)
-    def _embedding(self, texto: str) -> np.ndarray:
-        encoded = self.tokenizer(
-            texto,
-            padding=True,
-            truncation=True,
-            max_length=128,
-            return_tensors="pt",
-        ).to(self.device)
-
-        with torch.inference_mode():          # ← ganho de performance vs no_grad
-            out = self.bert(**encoded)
-
-        return out.last_hidden_state[:, 0, :].cpu().numpy()
+            self.pipeline_gravidade = pickle.load(f)
+        print("  [Classificador] Modelos prontos (TF-IDF, sem BERT).")
 
     def classificar(self, texto: str) -> dict:
         """
-        Retorna um dicionário com:
+        Retorna:
           tipo           – ex: "Violência física"
           gravidade      – ex: "alta"
           tipo_prob      – confiança 0-1 da predição de tipo
@@ -126,17 +87,15 @@ class ClassificadorViolencia:
           eh_violencia   – True quando tipo != classe_neutra E prob >= limiar
           confianca_ok   – True quando tipo_prob >= limiar_confianca
         """
-        emb = self._embedding(texto)
+        # Pipeline aceita lista de strings diretamente
+        tipo      = self.pipeline_tipo.predict([texto])[0]
+        tipo_prob = float(self.pipeline_tipo.predict_proba([texto]).max())
 
-        tipo       = self.rf_tipo.predict(emb)[0]
-        tipo_prob  = float(self.rf_tipo.predict_proba(emb).max())
+        gravidade      = self.pipeline_gravidade.predict([texto])[0]
+        grav_prob      = float(self.pipeline_gravidade.predict_proba([texto]).max())
 
-        gravidade      = self.rf_gravidade.predict(emb)[0]
-        grav_prob      = float(self.rf_gravidade.predict_proba(emb).max())
-
-        # Ponto de atenção 3: classe neutra configurável 
-        confianca_ok  = tipo_prob >= self.limiar_confianca
-        eh_violencia  = (tipo != self.classe_neutra) and confianca_ok
+        confianca_ok = tipo_prob >= self.limiar_confianca
+        eh_violencia = (tipo != self.classe_neutra) and confianca_ok
 
         return {
             "tipo":           tipo,
@@ -148,7 +107,7 @@ class ClassificadorViolencia:
         }
 
 
-#EMBEDDING SERVICE (Gemini) 
+# ── EMBEDDING SERVICE (Gemini) ───────────────────────────────────────────────
 class EmbeddingService:
     def __init__(self, api_key=None, model="gemini-embedding-001"):
         if api_key is None:
@@ -159,15 +118,14 @@ class EmbeddingService:
     def embed(self, texts, task_type="retrieval_document"):
         embeddings = []
         batch_size = 90
-        print(f"Iniciando geração de embeddings para {len(texts)} chunks...")
-
+        print(f"Gerando embeddings para {len(texts)} chunks...")
         for i in range(0, len(texts), batch_size):
-            lote_atual = texts[i:i + batch_size]
-            print(f"Processando lote {i // batch_size + 1} ({len(lote_atual)} chunks)...")
+            lote = texts[i:i + batch_size]
+            print(f"  Lote {i // batch_size + 1} ({len(lote)} chunks)...")
             try:
                 response = self.client.models.embed_content(
                     model=self.model,
-                    contents=lote_atual,
+                    contents=lote,
                     config=types.EmbedContentConfig(task_type=task_type),
                 )
                 for emb in response.embeddings:
@@ -175,21 +133,19 @@ class EmbeddingService:
                 if i + batch_size < len(texts):
                     time.sleep(2)
             except Exception as e:
-                print(f"Erro no lote {i // batch_size + 1}: {e}")
+                print(f"  Erro no lote {i // batch_size + 1}: {e}")
                 raise e
-
         print(f"Sucesso! {len(embeddings)} embeddings gerados.")
         return embeddings
 
 
-#FUNÇÕES UTILITÁRIAS
+# ── FUNÇÕES UTILITÁRIAS ──────────────────────────────────────────────────────
 def chunk_text(text, max_tokens=500):
     paragrafos   = [p.strip() for p in text.split("\n") if p.strip()]
     chunks       = []
     chunk_atual  = []
     tokens_atual = 0
     overlap      = 50
-    palavras_chunk_anterior = []
 
     for paragrafo in paragrafos:
         eh_titulo = len(paragrafo) < 80 and not paragrafo.endswith(".")
@@ -197,7 +153,7 @@ def chunk_text(text, max_tokens=500):
             if chunk_atual:
                 chunk_texto = " ".join(chunk_atual)
                 chunks.append(chunk_texto)
-                palavras_chunk_anterior = chunk_texto.split()[-overlap:] if overlap > 0 else []
+                palavras_ant = chunk_texto.split()[-overlap:]
                 chunk_atual  = []
                 tokens_atual = 0
             chunk_atual  = [paragrafo]
@@ -207,9 +163,9 @@ def chunk_text(text, max_tokens=500):
             if tokens_atual + len(palavras) > max_tokens and chunk_atual:
                 chunk_texto = " ".join(chunk_atual)
                 chunks.append(chunk_texto)
-                palavras_chunk_anterior = chunk_texto.split()[-overlap:] if overlap > 0 else []
-                chunk_atual  = ([" ".join(palavras_chunk_anterior)] if palavras_chunk_anterior else [])
-                tokens_atual = len(palavras_chunk_anterior)
+                palavras_ant = chunk_texto.split()[-overlap:]
+                chunk_atual  = ([" ".join(palavras_ant)] if palavras_ant else [])
+                tokens_atual = len(palavras_ant) if palavras_ant else 0
             chunk_atual.append(paragrafo)
             tokens_atual += len(palavras)
 
@@ -231,7 +187,7 @@ def armazenar_chunks_com_embeddings(chunks, embeddings, colecao):
         colecao.add(documents=novos_chunks, embeddings=novos_embeddings, ids=novos_ids)
         print(f"{len(novos_ids)} chunks novos armazenados.")
     else:
-        print("Dados já existem no banco. Nenhum chunk novo inserido.")
+        print("Dados já existem. Nenhum chunk novo inserido.")
 
 
 def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
@@ -253,10 +209,10 @@ DIRETRIZES DE COMPORTAMENTO:
 - Use linguagem simples, direta e humana. Evite termos técnicos sem explicação.
 - Seja BREVE. Máximo 3 parágrafos curtos. Priorize a informação mais urgente primeiro.
 - Nunca escreva listas longas. Uma resposta ideal tem no máximo 5 linhas.
-- Nunca repita o número 190 ou 180 mais de uma vez por conversa.
 - Se houver risco imediato, a primeira frase deve ser o número 190.
 - Demonstre empatia. A pessoa pode estar em situação de risco ou trauma.
 - Nunca minimize ou questione o relato da usuária.
+- Nunca repita o número 190 ou 180 mais de uma vez por conversa.
 - Quando a pessoa mencionar uma cidade, busque informações específicas dessa cidade no contexto.
 - Converse de forma natural, como uma assistente social faria — não como um manual jurídico.
 - Faça uma pergunta por vez para entender melhor a situação antes de dar orientações.
@@ -281,37 +237,33 @@ Você é um assistente virtual simpático e informal, especializado em dicas par
 organização doméstica, economia doméstica e pequenos serviços em casa.
 
 Responda sempre de forma leve, amigável e acessível, como se estivesse conversando com um amigo.
-Use exemplos práticos, sugestões criativas e incentive o bem-estar no ambiente doméstico.
-Não responda dúvidas jurídicas, de violência ou temas sensíveis: apenas dicas para o dia a dia
-do lar, organização, limpeza, decoração, receitas simples, economia de recursos e manutenção.
+Não responda dúvidas jurídicas, de violência ou temas sensíveis.
 
 Se a pergunta fugir desses temas, oriente gentilmente a buscar um profissional especializado.
 """
 
 
-#FUNÇÃO PRINCIPAL DE RESPOSTA
+# ── FUNÇÃO PRINCIPAL DE RESPOSTA ─────────────────────────────────────────────
 def responder_pergunta(
     pergunta,
     embedding_service,
     colecao,
     historico=[],
     modo="real",
-    classificacao=None,   # ← recebe o resultado do pré-classificador
+    classificacao=None,
 ):
     contexto     = buscar_chunks_relevantes(pergunta, embedding_service, colecao)
     contexto_str = "\n".join(contexto)
 
     system_prompt = system_prompt_real if modo == "real" else system_prompt_fachada
 
-    # Injeta a pré-classificação como contexto interno para a LLM
-    # (o modelo usa essa info para calibrar tom e urgência, sem expor ao usuário)
     prefixo_classificacao = ""
     if classificacao and classificacao["eh_violencia"]:
         prefixo_classificacao = (
             f"[ANÁLISE AUTOMÁTICA — tipo detectado: {classificacao['tipo']} | "
             f"gravidade: {classificacao['gravidade']} | "
             f"confiança: {classificacao['tipo_prob']:.0%}]\n"
-            f"Use essa informação para calibrar tom e urgência da resposta. "
+            f"Use essa informação para calibrar tom e urgência. "
             f"Não mencione essa análise à usuária.\n\n"
         )
 
@@ -336,7 +288,7 @@ def responder_pergunta(
     return response.choices[0].message.content
 
 
-#PONTO DE ENTRADA (teste local) 
+# ── PONTO DE ENTRADA (teste local) ───────────────────────────────────────────
 if __name__ == "__main__":
     caminho_arquivo = "Guia Completo.docx"
     documento = Document(caminho_arquivo)
@@ -344,9 +296,9 @@ if __name__ == "__main__":
     for tabela in documento.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
-                texto_celula = celula.text.strip()
-                if texto_celula:
-                    textos.append(texto_celula)
+                t = celula.text.strip()
+                if t:
+                    textos.append(t)
     texto = "\n".join(textos)
 
     chunks = chunk_text(texto, max_tokens=800)
@@ -355,13 +307,10 @@ if __name__ == "__main__":
     chroma_client = chromadb.PersistentClient(path="chroma_db")
     colecao = chroma_client.get_or_create_collection("documentos_juridicos")
 
-    api_key          = os.getenv("GEMINI_API_KEY")
-    embedding_service = EmbeddingService(api_key=api_key)
-
+    embedding_service = EmbeddingService(api_key=os.getenv("GEMINI_API_KEY"))
     embeddings = embedding_service.embed(chunks)
     armazenar_chunks_com_embeddings(chunks, embeddings, colecao)
 
-    # Instancia o classificador se os modelos existirem
     classificador = None
     if os.path.exists("modelos/rf_tipo.pkl"):
         classificador = ClassificadorViolencia()
@@ -370,7 +319,6 @@ if __name__ == "__main__":
     while True:
         pergunta = input("Você: ").strip()
         if pergunta.lower() == "sair":
-            print("Encerrando o chatbot.")
             break
         if not pergunta:
             continue
@@ -383,4 +331,3 @@ if __name__ == "__main__":
             print(f"\nAssistente: {resposta}\n")
         except Exception as e:
             print(f"ERRO: {e}")
-            print("Ocorreu um erro inesperado. Tente novamente.")
