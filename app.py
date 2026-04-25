@@ -342,6 +342,21 @@ def ping_health():
 threading.Thread(target=_carregar_servicos_background, daemon=True).start()
 ping_health()
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "mensagem": "Chatbot da Defensoria Pública - API funcionando",
+        "endpoints_disponiveis": [
+            "/chat (POST)",
+            "/sessoes (GET)",
+            "/historico/<session_id> (GET)",
+            "/identificar (POST)",
+            "/apagar/<session_id> (DELETE)",
+            "/health (GET)"
+        ],
+        "instrucao": "Envie mensagens para /chat com JSON: {'mensagem':'...', 'session_id':'...'}"
+    })
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
