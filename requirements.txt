@@ -1,8 +1,24 @@
-flask
-flask-cors
-google-genai
-groq
-chromadb
-python-docx
-python-dotenv
-sentence-transformers
+flask==3.1.0
+flask-cors==5.0.0
+gunicorn==23.0.0
+python-dotenv==1.0.1
+
+# LLM / Embeddings
+groq==0.11.0
+google-genai==1.5.0
+
+# Banco vetorial
+chromadb==0.6.3
+
+# Classificador
+torch==2.3.1
+transformers==4.44.2
+scikit-learn==1.5.2
+numpy==1.26.4
+pandas==2.2.3
+
+# Documento Word
+python-docx==1.1.2
+
+# HTTP (keep-alive)
+requests==2.32.3
