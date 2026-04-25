@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 import threading
 import requests
 from flask_cors import CORS
@@ -344,18 +344,7 @@ ping_health()
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({
-        "mensagem": "Chatbot da Defensoria Pública - API funcionando",
-        "endpoints_disponiveis": [
-            "/chat (POST)",
-            "/sessoes (GET)",
-            "/historico/<session_id> (GET)",
-            "/identificar (POST)",
-            "/apagar/<session_id> (DELETE)",
-            "/health (GET)"
-        ],
-        "instrucao": "Envie mensagens para /chat com JSON: {'mensagem':'...', 'session_id':'...'}"
-    })
+    return render_template("index.html")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
