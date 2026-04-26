@@ -190,7 +190,50 @@ def armazenar_chunks_com_embeddings(chunks, embeddings, colecao):
         print("Dados já existem. Nenhum chunk novo inserido.")
 
 
+def carregar_texto_documento(caminho_arquivo):
+    documento = Document(caminho_arquivo)
+    textos = [p.text for p in documento.paragraphs if p.text.strip()]
+    for tabela in documento.tables:
+        for linha in tabela.rows:
+            for celula in linha.cells:
+                t = celula.text.strip()
+                if t:
+                    textos.append(t)
+    return "\n".join(textos)
+
+
+def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia Completo.docx"):
+    if embedding_service is None:
+        print("[RAG] EmbeddingService indisponivel. Seguindo sem indexacao.")
+        return
+
+    try:
+        if colecao.count() > 0:
+            print("[RAG] Colecao ja populada.")
+            return
+    except Exception as e:
+        print(f"[RAG] Nao foi possivel consultar a colecao: {e}")
+        return
+
+    if not os.path.exists(caminho_arquivo):
+        print(f"[RAG] Documento base nao encontrado: {caminho_arquivo}")
+        return
+
+    print(f"[RAG] Populando colecao a partir de {caminho_arquivo}...")
+    texto = carregar_texto_documento(caminho_arquivo)
+    chunks = chunk_text(texto, max_tokens=800)
+    embeddings = embedding_service.embed(chunks)
+    armazenar_chunks_com_embeddings(chunks, embeddings, colecao)
+
+
 def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
+    if embedding_service is None:
+        return []
+    try:
+        if colecao.count() == 0:
+            return []
+    except Exception:
+        return []
     embedding = embedding_service.embed([pergunta], task_type="retrieval_query")[0]
     resultado = colecao.query(query_embeddings=[embedding], n_results=n_results)
     return resultado["documents"][0] if "documents" in resultado else []
@@ -248,10 +291,11 @@ def responder_pergunta(
     pergunta,
     embedding_service,
     colecao,
-    historico=[],
+    historico=None,
     modo="real",
     classificacao=None,
 ):
+    historico = historico or []
     contexto     = buscar_chunks_relevantes(pergunta, embedding_service, colecao)
     contexto_str = "\n".join(contexto)
 
@@ -278,7 +322,11 @@ def responder_pergunta(
     )
     messages.append({"role": "user", "content": prompt_final})
 
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise RuntimeError("GROQ_API_KEY nao configurada no ambiente.")
+
+    groq_client = Groq(api_key=groq_api_key)
     response    = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,

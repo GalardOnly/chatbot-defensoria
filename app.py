@@ -7,6 +7,7 @@ from conteudo_chat import (
     EmbeddingService,
     buscar_chunks_relevantes,
     ClassificadorViolencia,
+    garantir_base_conhecimento,
 )
 import chromadb
 import os
@@ -146,6 +147,10 @@ def _carregar_servicos_background():
         try:
             embedding_service = EmbeddingService()
             print("[boot] EmbeddingService pronto.")
+            try:
+                garantir_base_conhecimento(embedding_service, colecao)
+            except Exception as e:
+                print(f"[boot] ERRO ao popular base de conhecimento: {e}")
         except Exception as e:
             print(f"[boot] ERRO EmbeddingService: {e}")
 
@@ -346,10 +351,19 @@ def apagar(session_id):
 
 @app.route("/health", methods=["GET"])
 def health():
+    try:
+        colecao_count = colecao.count()
+    except Exception:
+        colecao_count = None
+
     return jsonify({
         "status":              "ok",
         "servicos_prontos":    _servicos_prontos,
         "classificador_ativo": classificador is not None,
+        "embedding_ativo":     embedding_service is not None,
+        "groq_configurado":    bool(os.getenv("GROQ_API_KEY")),
+        "gemini_configurado":  bool(os.getenv("GEMINI_API_KEY")),
+        "colecao_count":       colecao_count,
     })
 
 
