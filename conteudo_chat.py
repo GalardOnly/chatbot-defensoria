@@ -349,6 +349,17 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None):
     )
 
 
+def extrair_fatos_recentes(historico):
+    fatos = []
+    for msg in historico[-6:]:
+        if msg.get("role") != "user":
+            continue
+        conteudo = (msg.get("content") or "").strip()
+        if conteudo:
+            fatos.append(f"- {conteudo}")
+    return "\n".join(fatos[-4:])
+
+
 def responder_pergunta(
     pergunta,
     embedding_service,
@@ -374,6 +385,18 @@ def responder_pergunta(
         )
 
     messages = [{"role": "system", "content": system_prompt}]
+    if modo == "real":
+        fatos_recentes = extrair_fatos_recentes(historico)
+        messages.append({
+            "role": "system",
+            "content": (
+                "Antes de responder, confira os fatos recentes da conversa. "
+                "Nao contradiga o que a usuaria acabou de dizer. "
+                "Se ela disser que o agressor esta perto, ouvindo, no quarto, no banho ou pode escutar, "
+                "priorize orientacoes discretas, silenciosas e de baixo risco.\n\n"
+                f"FATOS RECENTES:\n{fatos_recentes or '- Nenhum fato recente registrado.'}"
+            ),
+        })
     for msg in historico[-5:]:
         messages.append(msg)
 
