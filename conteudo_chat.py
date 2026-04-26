@@ -360,6 +360,16 @@ def extrair_fatos_recentes(historico):
     return "\n".join(fatos[-4:])
 
 
+def extrair_dialogo_recente(historico):
+    linhas = []
+    for msg in historico[-6:]:
+        role = "Usuaria" if msg.get("role") == "user" else "Assistente"
+        conteudo = (msg.get("content") or "").strip()
+        if conteudo:
+            linhas.append(f"{role}: {conteudo}")
+    return "\n".join(linhas)
+
+
 def responder_pergunta(
     pergunta,
     embedding_service,
@@ -385,6 +395,16 @@ def responder_pergunta(
         )
 
     messages = [{"role": "system", "content": system_prompt}]
+    dialogo_recente = extrair_dialogo_recente(historico)
+    messages.append({
+        "role": "system",
+        "content": (
+            f"MODO ATIVO: {modo.upper()}.\n"
+            "Mantenha continuidade com a conversa recente. "
+            "Nao ignore fatos ja mencionados e nao repita perguntas ja respondidas.\n\n"
+            f"DIALOGO RECENTE:\n{dialogo_recente or 'Nenhum dialogo recente registrado.'}"
+        ),
+    })
     if modo == "real":
         fatos_recentes = extrair_fatos_recentes(historico)
         messages.append({

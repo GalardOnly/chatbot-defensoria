@@ -88,25 +88,45 @@ def detectar_modo_local(mensagem):
         return "fachada"
 
     termos_reais = [
-        "ajuda", "socorro", "agred", "violenc", "ameac", "medo", "abuso",
+        "socorro", "agred", "violenc", "ameac", "medo", "abuso",
         "bater", "espanc", "marido", "namorado", "companheiro", "agressor",
         "protetiva", "delegacia", "denuncia", "machuc", "feriu", "risco",
+        "humilha", "xing", "controla", "persegu", "tranca", "suficiente",
     ]
     termos_fachada = [
         "receita", "bolo", "cozinha", "decoracao", "limpeza", "faxina",
         "casa", "lar", "organizacao", "mofo", "encanamento", "jardim",
+        "planta", "quintal", "lavar roupa", "detergente", "sabao",
+        "fogao", "geladeira", "sofa", "mancha", "varrer", "passar pano",
     ]
 
     if any(termo in texto for termo in termos_reais):
         return "real"
     if any(termo in texto for termo in termos_fachada):
         return "fachada"
-    return "real"
+    return "indefinido"
+
+
+def historico_indica_fachada(historico):
+    termos_fachada = [
+        "receita", "bolo", "cozinha", "decoracao", "limpeza", "faxina",
+        "casa", "lar", "organizacao", "mofo", "encanamento", "jardim",
+        "sofa", "sofá", "roupa", "fogao", "fogão", "geladeira",
+        "mancha", "lavar", "detergente", "sabao", "planta", "quintal",
+        "varrer", "passar pano",
+    ]
+    for msg in historico[-6:]:
+        texto = (msg.get("mensagem") or msg.get("content") or "").lower()
+        if any(termo in texto for termo in termos_fachada):
+            return True
+    return False
 
 
 def detectar_modo(mensagem, historico=None):
     historico = historico or []
     modo_local = detectar_modo_local(mensagem)
+    if modo_local == "indefinido" and historico_indica_fachada(historico):
+        modo_local = "fachada"
     if modo_local == "real":
         return "real"
 
@@ -262,17 +282,30 @@ def chat():
         m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
         for m in historico_sessao if m["role"] == "user"
     )
+    teve_real_recente = any(
+        m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
+        for m in historico_sessao[-8:] if m["role"] == "user"
+    )
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
+    modo_local = detectar_modo_local(mensagem)
     try:
         modo_llm = detectar_modo(mensagem, historico=historico_sessao)
     except Exception as e:
         print(f"[chat] Aviso ao detectar modo: {e}")
-        modo_llm = "real" if (teve_real_no_historico or classificacao_indica_real) else "fachada"
-    modo_final = (
-        "real"
-        if (teve_real_no_historico or classificacao_indica_real or modo_llm == "real")
-        else "fachada"
-    )
+        modo_llm = "real" if (teve_real_recente or classificacao_indica_real) else "fachada"
+
+    if classificacao_indica_real or modo_local == "real":
+        modo_final = "real"
+    elif modo_local == "fachada":
+        modo_final = "fachada"
+    elif modo_llm == "real":
+        modo_final = "real"
+    elif modo_llm == "fachada":
+        modo_final = "fachada"
+    elif teve_real_recente or teve_real_no_historico:
+        modo_final = "real"
+    else:
+        modo_final = "fachada"
 
     # ── Resposta da LLM ───────────────────────────────────────────────────────
     historico_api = [

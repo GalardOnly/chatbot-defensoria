@@ -6,6 +6,7 @@
 <title>Dicas de Casa Fortaleza</title>
 <style>
   :root {
+    --app-height: 100dvh;
     --bg: #07111f;
     --panel: #0d1b2d;
     --panel-strong: #12243c;
@@ -27,7 +28,7 @@
   }
 
   html, body {
-    min-height: 100%;
+    height: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: Arial, sans-serif;
@@ -44,7 +45,7 @@
   }
 
   #app {
-    min-height: 100dvh;
+    height: var(--app-height);
     display: flex;
     flex-direction: column;
     background:
@@ -115,6 +116,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    height: 100%;
   }
 
   #mensagens {
@@ -211,6 +213,10 @@
     background: rgba(7, 17, 31, 0.96);
     border-top: 1px solid var(--border);
     backdrop-filter: blur(12px);
+    position: sticky;
+    bottom: 0;
+    z-index: 15;
+    flex-shrink: 0;
   }
 
   #input-msg {
@@ -419,6 +425,12 @@
     return Math.random().toString(36).slice(2, 11);
   }
 
+  function atualizarAlturaViewport() {
+    const viewport = window.visualViewport;
+    const altura = viewport ? viewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${altura}px`);
+  }
+
   function horaAtual() {
     return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
@@ -553,6 +565,19 @@
       adicionarBolha('Erro ao conectar. Tente novamente.', 'assistente');
     }
   }
+
+  atualizarAlturaViewport();
+  window.addEventListener('resize', atualizarAlturaViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', atualizarAlturaViewport);
+    window.visualViewport.addEventListener('scroll', atualizarAlturaViewport);
+  }
+  document.getElementById('input-msg').addEventListener('focus', () => {
+    setTimeout(() => {
+      atualizarAlturaViewport();
+      rolarParaFim();
+    }, 250);
+  });
 
   criarMensagemInicial();
 </script>
