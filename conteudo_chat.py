@@ -3,7 +3,7 @@ import time
 import pickle
 import numpy as np
 import chromadb
-from groq import Groq
+import requests
 from google import genai
 from google.genai import types
 from docx import Document
@@ -226,6 +226,34 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
     armazenar_chunks_com_embeddings(chunks, embeddings, colecao)
 
 
+def criar_chat_groq(messages, model="llama-3.3-70b-versatile", temperature=0.6, max_tokens=600):
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise RuntimeError("GROQ_API_KEY nao configurada no ambiente.")
+
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {groq_api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    try:
+        return payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        raise RuntimeError(f"Resposta invalida do Groq: {payload}") from e
+
+
 def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
     if embedding_service is None:
         return []
@@ -356,18 +384,12 @@ def responder_pergunta(
     )
     messages.append({"role": "user", "content": prompt_final})
 
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        raise RuntimeError("GROQ_API_KEY nao configurada no ambiente.")
-
-    groq_client = Groq(api_key=groq_api_key)
-    response    = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    return criar_chat_groq(
         messages=messages,
+        model="llama-3.3-70b-versatile",
         temperature=0.6,
         max_tokens=600,
     )
-    return response.choices[0].message.content
 
 
 # ── PONTO DE ENTRADA (teste local) ───────────────────────────────────────────

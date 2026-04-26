@@ -5,6 +5,7 @@ from flask_cors import CORS
 from conteudo_chat import (
     responder_pergunta,
     resposta_contingencia,
+    criar_chat_groq,
     EmbeddingService,
     buscar_chunks_relevantes,
     ClassificadorViolencia,
@@ -116,8 +117,6 @@ def detectar_modo(mensagem, historico=None):
             for m in historico if m["role"] == "user"
         ) else modo_local
 
-    from groq import Groq
-    groq_client = Groq(api_key=groq_api_key)
     contexto    = "\n".join([f"{m['role']}: {m['mensagem']}" for m in historico[-4:]])
     prompt = f"""Analise a mensagem abaixo e responda apenas com uma palavra: REAL ou FACHADA.
 
@@ -132,12 +131,13 @@ Mensagem atual: {mensagem}
 Responda apenas: REAL ou FACHADA"""
 
     try:
-        response  = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        resultado = criar_chat_groq(
             messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
             max_tokens=10,
+            temperature=0,
         )
-        resultado = response.choices[0].message.content.strip().upper()
+        resultado = resultado.strip().upper()
         return "real" if "REAL" in resultado else "fachada"
     except Exception as e:
         print(f"[detectar_modo] Aviso: {e}")
