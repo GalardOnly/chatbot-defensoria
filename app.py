@@ -4,6 +4,7 @@ import requests
 from flask_cors import CORS
 from conteudo_chat import (
     responder_pergunta,
+    resposta_contingencia,
     EmbeddingService,
     buscar_chunks_relevantes,
     ClassificadorViolencia,
@@ -80,14 +81,40 @@ def carregar_historico(session_id):
 
 
 # ── DETECÇÃO DE MODO ─────────────────────────────────────────────────────────
+def detectar_modo_local(mensagem):
+    texto = (mensagem or "").lower()
+    if texto.strip() in {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}:
+        return "fachada"
+
+    termos_reais = [
+        "ajuda", "socorro", "agred", "violenc", "ameac", "medo", "abuso",
+        "bater", "espanc", "marido", "namorado", "companheiro", "agressor",
+        "protetiva", "delegacia", "denuncia", "machuc", "feriu", "risco",
+    ]
+    termos_fachada = [
+        "receita", "bolo", "cozinha", "decoracao", "limpeza", "faxina",
+        "casa", "lar", "organizacao", "mofo", "encanamento", "jardim",
+    ]
+
+    if any(termo in texto for termo in termos_reais):
+        return "real"
+    if any(termo in texto for termo in termos_fachada):
+        return "fachada"
+    return "real"
+
+
 def detectar_modo(mensagem, historico=None):
     historico = historico or []
+    modo_local = detectar_modo_local(mensagem)
+    if modo_local == "real":
+        return "real"
+
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
         return "real" if any(
             m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
             for m in historico if m["role"] == "user"
-        ) else "fachada"
+        ) else modo_local
 
     from groq import Groq
     groq_client = Groq(api_key=groq_api_key)
@@ -114,7 +141,7 @@ Responda apenas: REAL ou FACHADA"""
         return "real" if "REAL" in resultado else "fachada"
     except Exception as e:
         print(f"[detectar_modo] Aviso: {e}")
-        return "fachada"
+        return modo_local
 
 
 # ── FLASK APP ────────────────────────────────────────────────────────────────
@@ -130,6 +157,7 @@ embedding_service = None
 classificador     = None
 _init_lock        = threading.Lock()
 _servicos_prontos = False
+_ultimo_erro_chat = None
 
 
 def _carregar_servicos_background():
@@ -197,6 +225,7 @@ def painel():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    global _ultimo_erro_chat
     data = request.get_json(silent=True) or {}
     mensagem   = data.get("mensagem", "")
     session_id = data.get("session_id", "")
@@ -258,9 +287,15 @@ def chat():
             modo=modo_final,
             classificacao=classificacao,
         )
+        _ultimo_erro_chat = None
     except Exception as e:
         print(f"[chat] ERRO: {e}")
-        resposta = "Servico temporariamente indisponivel. Tente novamente."
+        _ultimo_erro_chat = str(e)
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo=modo_final,
+            classificacao=classificacao,
+        )
 
     salvar_mensagem(session_id, "assistant", resposta)
 
@@ -364,6 +399,7 @@ def health():
         "groq_configurado":    bool(os.getenv("GROQ_API_KEY")),
         "gemini_configurado":  bool(os.getenv("GEMINI_API_KEY")),
         "colecao_count":       colecao_count,
+        "ultimo_erro_chat":    _ultimo_erro_chat,
     })
 
 

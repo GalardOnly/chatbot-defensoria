@@ -287,6 +287,40 @@ Se a pergunta fugir desses temas, oriente gentilmente a buscar um profissional e
 
 
 # ── FUNÇÃO PRINCIPAL DE RESPOSTA ─────────────────────────────────────────────
+def resposta_contingencia(pergunta, modo="real", classificacao=None):
+    pergunta_lower = (pergunta or "").lower()
+
+    if modo == "real":
+        if any(token in pergunta_lower for token in ["agred", "amea", "machuc", "bater", "socorro", "risco"]):
+            return (
+                "Se voce estiver em risco imediato, ligue 190 agora ou procure um lugar seguro perto de voce. "
+                "Voce nao esta sozinha.\n\n"
+                "Se quiser, eu posso te orientar no proximo passo, como medida protetiva, registro da ocorrencia "
+                "ou atendimento pela Defensoria."
+            )
+
+        if classificacao and classificacao.get("eh_violencia"):
+            return (
+                "Entendi. Posso te orientar com seguranca sobre os seus direitos e os proximos passos. "
+                "Se houver risco agora, priorize sua seguranca e procure ajuda imediata.\n\n"
+                "Me diga, em uma frase: o que aconteceu por ultimo?"
+            )
+
+        return (
+            "Estou aqui para te ajudar. Se isso estiver relacionado a violencia, ameaca ou medo dentro de casa, "
+            "posso te orientar com cuidado sobre protecao e apoio.\n\n"
+            "Me conte, em uma frase, o que esta acontecendo."
+        )
+
+    if any(token in pergunta_lower for token in ["oi", "ola", "bom dia", "boa tarde", "boa noite"]):
+        return "Ola! Posso te ajudar com organizacao da casa, limpeza, economia domestica e pequenas duvidas do dia a dia."
+
+    return (
+        "Posso te ajudar com dicas para o lar, organizacao, limpeza, economia domestica e pequenos cuidados da casa. "
+        "Se quiser, me diga qual e a sua duvida."
+    )
+
+
 def responder_pergunta(
     pergunta,
     embedding_service,
