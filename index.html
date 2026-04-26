@@ -278,6 +278,7 @@
 </div>
 
 <script>
+  const API_BASE = window.location.origin;
   const SESSION_ID = Math.random().toString(36).substr(2, 9);
   document.getElementById('hora-inicial').textContent = horaAtual();
   let modoAtual = 'fachada';
@@ -338,11 +339,12 @@
     const nome = document.getElementById('input-nome').value.trim();
     if (!nome) return;
     try {
-      await fetch('https://chatbot-defensoria.onrender.com/identificar', {
+      const response = await fetch(`${API_BASE}/identificar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: SESSION_ID, nome })
       });
+      if (!response.ok) throw new Error('Falha ao identificar usuaria');
     } catch(e) {}
     fecharModal();
     adicionarBolha('Obrigada, ' + nome + '. Estou aqui para te ajudar.', 'assistente');
@@ -361,14 +363,15 @@
     mostrarDigitando();
 
     try {
-      const r = await fetch('https://chatbot-defensoria.onrender.com/chat', {
+      const r = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mensagem, session_id: SESSION_ID })
       });
+      if (!r.ok) throw new Error('Falha na resposta do servidor');
       const data = await r.json();
       removerDigitando();
-      adicionarBolha(data.resposta, 'assistente');
+      adicionarBolha(data.resposta || 'Servico temporariamente indisponivel. Tente novamente.', 'assistente');
 
       if (data.modo === 'real' && modoAtual === 'fachada' && !consentimentoMostrado) {
         modoAtual = 'real';

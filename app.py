@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import threading
 import requests
 from flask_cors import CORS
@@ -15,6 +15,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 # ── BANCO DE DADOS ───────────────────────────────────────────────────────────
@@ -78,9 +79,17 @@ def carregar_historico(session_id):
 
 
 # ── DETECÇÃO DE MODO ─────────────────────────────────────────────────────────
-def detectar_modo(mensagem, historico=[]):
+def detectar_modo(mensagem, historico=None):
+    historico = historico or []
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        return "real" if any(
+            m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
+            for m in historico if m["role"] == "user"
+        ) else "fachada"
+
     from groq import Groq
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    groq_client = Groq(api_key=groq_api_key)
     contexto    = "\n".join([f"{m['role']}: {m['mensagem']}" for m in historico[-4:]])
     prompt = f"""Analise a mensagem abaixo e responda apenas com uma palavra: REAL ou FACHADA.
 
@@ -94,13 +103,17 @@ Mensagem atual: {mensagem}
 
 Responda apenas: REAL ou FACHADA"""
 
-    response  = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=10,
-    )
-    resultado = response.choices[0].message.content.strip().upper()
-    return "real" if "REAL" in resultado else "fachada"
+    try:
+        response  = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10,
+        )
+        resultado = response.choices[0].message.content.strip().upper()
+        return "real" if "REAL" in resultado else "fachada"
+    except Exception as e:
+        print(f"[detectar_modo] Aviso: {e}")
+        return "fachada"
 
 
 # ── FLASK APP ────────────────────────────────────────────────────────────────
@@ -167,9 +180,19 @@ def garantir_servicos():
 
 
 # ── ENDPOINTS ────────────────────────────────────────────────────────────────
+@app.route("/", methods=["GET"])
+def index():
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/painel", methods=["GET"])
+def painel():
+    return send_from_directory(BASE_DIR, "painel.html")
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
-    data       = request.get_json()
+    data = request.get_json(silent=True) or {}
     mensagem   = data.get("mensagem", "")
     session_id = data.get("session_id", "")
 
@@ -206,7 +229,11 @@ def chat():
         for m in historico_sessao if m["role"] == "user"
     )
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
-    modo_llm   = detectar_modo(mensagem, historico=historico_sessao)
+    try:
+        modo_llm = detectar_modo(mensagem, historico=historico_sessao)
+    except Exception as e:
+        print(f"[chat] Aviso ao detectar modo: {e}")
+        modo_llm = "real" if (teve_real_no_historico or classificacao_indica_real) else "fachada"
     modo_final = (
         "real"
         if (teve_real_no_historico or classificacao_indica_real or modo_llm == "real")
@@ -342,9 +369,6 @@ def ping_health():
 threading.Thread(target=_carregar_servicos_background, daemon=True).start()
 ping_health()
 
-@app.route("/", methods=["GET"])
-def home():
-    return render_template("index.html")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
