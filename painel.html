@@ -221,8 +221,7 @@
   <div id="login-box">
     <h2> Defensoria do Pará</h2>
     <p>Painel de Monitoramento</p>
-    <input id="usuario" type="text" placeholder="Usuário">
-    <input id="senha" type="password" placeholder="Senha">
+    <input id="token-admin" type="password" placeholder="Token administrativo">
     <button onclick="login()">Entrar</button>
     <div id="erro-login"></div>
   </div>
@@ -255,28 +254,58 @@
 </div>
 
 <script>
-  const USUARIO = 'defensoria';
-  const SENHA = 'para2024';
+  const API_BASE = window.location.origin;
+  const TOKEN_STORAGE_KEY = 'painel_admin_token';
   let sessoesConhecidas = {};
   let filtroReal = false;
+  let adminToken = sessionStorage.getItem(TOKEN_STORAGE_KEY) || '';
 
-  function login() {
-    const u = document.getElementById('usuario').value;
-    const s = document.getElementById('senha').value;
-    if (u === USUARIO && s === SENHA) {
+  function headersAdmin(extra = {}) {
+    return {
+      ...extra,
+      Authorization: `Bearer ${adminToken}`
+    };
+  }
+
+  async function validarToken(token) {
+    const response = await fetch(`${API_BASE}/health/admin`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.ok;
+  }
+
+  async function login() {
+    const token = document.getElementById('token-admin').value.trim();
+    if (!token) {
+      document.getElementById('erro-login').textContent = 'Informe o token administrativo.';
+      return;
+    }
+
+    try {
+      const valido = await validarToken(token);
+      if (!valido) {
+        document.getElementById('erro-login').textContent = 'Token inválido.';
+        return;
+      }
+
+      adminToken = token;
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+      document.getElementById('erro-login').textContent = '';
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('painel-screen').style.display = 'block';
       carregarSessoes();
-    } else {
-      document.getElementById('erro-login').textContent = 'Usuário ou senha incorretos.';
+    } catch (e) {
+      document.getElementById('erro-login').textContent = 'Não foi possível validar o token agora.';
     }
   }
 
   function logout() {
+    adminToken = '';
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('painel-screen').style.display = 'none';
-    document.getElementById('usuario').value = '';
-    document.getElementById('senha').value = '';
+    document.getElementById('token-admin').value = '';
+    document.getElementById('erro-login').textContent = '';
   }
 
   function toggleFiltro() {
@@ -288,7 +317,10 @@
 
   async function carregarSessoes() {
     try {
-      const r = await fetch('https://chatbot-defensoria.onrender.com/sessoes');
+      const r = await fetch(`${API_BASE}/sessoes`, {
+        headers: headersAdmin()
+      });
+      if (!r.ok) throw new Error('Falha ao carregar sessões');
       const data = await r.json();
       sessoesConhecidas = data.sessoes || {};
       renderizarSessoes();
@@ -324,13 +356,29 @@
       const isReal = info.modo_detectado === 'real';
       const div = document.createElement('div');
       div.className = 'sessao-item ' + (isReal ? 'real' : 'fachada');
-      div.innerHTML = `
-        <div>
-          <strong>${info.nome ? info.nome : 'Sessão ' + id.substr(0,8)}</strong>
-          ${isReal ? '<span class="badge-alerta">⚠️ ALERTA</span>' : ''}
-        </div>
-        <div class="sessao-timestamp">${info.total_msgs} mensagens · ${info.ultima_msg || ''}</div>
-      `;
+
+      const header = document.createElement('div');
+      const nome = document.createElement('strong');
+      nome.textContent = info.nome ? info.nome : 'Sessão ' + id.substr(0, 8);
+      header.appendChild(nome);
+
+      if (isReal) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-alerta';
+        badge.textContent = '⚠️ ALERTA';
+        header.appendChild(document.createTextNode(' '));
+        header.appendChild(badge);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'sessao-timestamp';
+      const ultimaMsg = info.ultima_msg
+        ? new Date(info.ultima_msg).toLocaleString('pt-BR')
+        : 'Sem atividade registrada';
+      meta.textContent = `${info.total_msgs} mensagens · ${ultimaMsg}`;
+
+      div.appendChild(header);
+      div.appendChild(meta);
       div.onclick = () => verHistorico(id);
       container.appendChild(div);
     });
@@ -338,7 +386,10 @@
 
   async function verHistorico(session_id) {
     try {
-      const r = await fetch(`https://chatbot-defensoria.onrender.com/historico/${session_id}`);
+      const r = await fetch(`${API_BASE}/historico/${session_id}`, {
+        headers: headersAdmin()
+      });
+      if (!r.ok) throw new Error('Falha ao carregar histórico');
       const data = await r.json();
       document.getElementById('sem-sessao').style.display = 'none';
       document.getElementById('historico-msgs').style.display = 'block';
@@ -384,6 +435,11 @@
       'presa','trancada','agredida','perigo','ferida','machucada'];
     const lower = mensagem.toLowerCase();
     return palavras.some(p => lower.includes(p)) ? 'real' : 'fachada';
+  }
+
+  if (adminToken) {
+    document.getElementById('token-admin').value = adminToken;
+    login();
   }
 </script>
 </body>

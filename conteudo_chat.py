@@ -1143,7 +1143,7 @@ if __name__ == "__main__":
     armazenar_chunks_com_embeddings(chunks, embeddings, colecao)
 
     classificador = None
-    if os.path.exists("modelos/rf_tipo.pkl"):
+    if os.path.exists("modelos/rf_tipo.joblib"):
         classificador = ClassificadorViolencia()
 
     print("\nChatbot pronto! Digite 'sair' para encerrar.\n")

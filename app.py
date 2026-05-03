@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "historico.db")
 
 
 # ── CRIPTOGRAFIA DE CAMPOS SENSÍVEIS ────────────────────────────────────────
@@ -262,9 +263,24 @@ def session_id_valido(session_id: str) -> bool:
     return bool(session_id and _SESSION_ID_RE.match(session_id))
 
 
+def obter_conexao_db():
+    """
+    Abre uma conexão SQLite configurada para acesso concorrente moderado.
+
+    WAL melhora a convivência entre leituras e escritas; busy_timeout reduz
+    erros transitórios de "database is locked" em bursts de requisições.
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=15, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    return conn
+
+
 # ── BANCO DE DADOS ───────────────────────────────────────────────────────────
 def init_db():
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS historico (
@@ -309,6 +325,18 @@ def init_db():
             c.execute(f"ALTER TABLE historico ADD COLUMN {coluna} {tipo}")
         except sqlite3.OperationalError:
             pass   # coluna ja existe
+    c.execute("""
+        CREATE INDEX IF NOT EXISTS idx_historico_session_id
+        ON historico(session_id, id)
+    """)
+    c.execute("""
+        CREATE INDEX IF NOT EXISTS idx_historico_session_role_id
+        ON historico(session_id, role, id)
+    """)
+    c.execute("""
+        CREATE INDEX IF NOT EXISTS idx_historico_session_timestamp
+        ON historico(session_id, timestamp)
+    """)
     conn.commit()
     conn.close()
 
@@ -356,7 +384,7 @@ def extrair_features(mensagem: str, session_id: str) -> dict:
     ]))
 
     # Heuristica de primeiro relato na sessao
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute("SELECT COUNT(*) FROM historico WHERE session_id = ? AND role = 'user'", (session_id,))
     total_user = c.fetchone()[0]
@@ -381,7 +409,7 @@ def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=N
     }
 
     # 2. Cifrar mensagem
-    conn           = sqlite3.connect("historico.db")
+    conn           = obter_conexao_db()
     c              = conn.cursor()
     timestamp      = datetime.now(timezone.utc).isoformat()
     mensagem_salva = cifrar(mensagem)
@@ -405,7 +433,7 @@ def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=N
 
 
 def carregar_historico(session_id):
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute(
         """SELECT role, mensagem, timestamp, tipo_violencia, gravidade
@@ -683,12 +711,12 @@ def index():
 
 
 @app.route("/painel", methods=["GET"])
-@requer_admin
 def painel():
     """
-    Painel administrativo — protegido.
-    O painel.html em si já requer o token para carregar dados via /sessoes,
-    mas protegemos o HTML também para não vazar a estrutura da interface.
+    Painel administrativo.
+    O HTML é público, mas os dados só carregam com ADMIN_TOKEN via fetch.
+    Isso permite abrir a interface no navegador sem depender de headers
+    customizados na navegação inicial.
     """
     return send_from_directory(BASE_DIR, "painel.html")
 
@@ -748,7 +776,7 @@ def chat():
     if classificador:
         try:
             classificacao = classificador.classificar(mensagem_limpa)
-            conn = sqlite3.connect("historico.db")
+            conn = obter_conexao_db()
             c    = conn.cursor()
             c.execute(
                 """UPDATE historico SET tipo_violencia = ?, gravidade = ?
@@ -832,7 +860,7 @@ def chat():
 @requer_admin
 @limiter.limit("5 per minute")
 def sessoes():
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute("SELECT session_id, COUNT(*) as total FROM historico GROUP BY session_id")
     rows = c.fetchall()
@@ -864,6 +892,7 @@ def sessoes():
             "modo_detectado":   "real" if teve_violencia else "fachada",
             "nome":             identificacoes.get(sid),
             "tipos_detectados": tipos_detectados,
+            "ultima_msg":       hist[-1]["timestamp"] if hist else None,
         }
     return jsonify({"sessoes": resumo})
 
@@ -877,10 +906,7 @@ def historico(session_id):
     return jsonify({"session_id": session_id, "historico": carregar_historico(session_id)})
 
 
-@app.route("/identificar", methods=["POST"])
-@requer_admin
-@limiter.limit("5 per minute")
-def identificar():
+def _salvar_identificacao():
     data       = request.get_json(silent=True) or {}
     session_id = (data.get("session_id") or "").strip()
     nome       = (data.get("nome") or "").strip()
@@ -893,7 +919,7 @@ def identificar():
     if len(nome) > 200:
         return jsonify({"erro": "Nome muito longo (máximo 200 caracteres)."}), 400
 
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute(
         "INSERT OR REPLACE INTO identificacao VALUES (?, ?, 1, ?)",
@@ -904,14 +930,11 @@ def identificar():
     return jsonify({"status": "ok"})
 
 
-@app.route("/apagar/<session_id>", methods=["DELETE"])
-@requer_admin
-@limiter.limit("5 per minute")
-def apagar(session_id):
+def _apagar_sessao(session_id: str):
     if not session_id_valido(session_id):
         return jsonify({"erro": "session_id inválido."}), 400
 
-    conn = sqlite3.connect("historico.db")
+    conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute("DELETE FROM historico     WHERE session_id = ?", (session_id,))
     c.execute("DELETE FROM identificacao WHERE session_id = ?", (session_id,))
@@ -923,6 +946,32 @@ def apagar(session_id):
         f"SESSÃO APAGADA | session_id={session_id} | ip={request.remote_addr}"
     )
     return jsonify({"status": "apagado"})
+
+
+@app.route("/identificar", methods=["POST"])
+@requer_admin
+@limiter.limit("5 per minute")
+def identificar_admin():
+    return _salvar_identificacao()
+
+
+@app.route("/apagar/<session_id>", methods=["DELETE"])
+@requer_admin
+@limiter.limit("5 per minute")
+def apagar_admin(session_id):
+    return _apagar_sessao(session_id)
+
+
+@app.route("/conversa/identificar", methods=["POST"])
+@limiter.limit("10 per minute", key_func=_chave_session_ou_ip)
+def identificar_publico():
+    return _salvar_identificacao()
+
+
+@app.route("/conversa/<session_id>", methods=["DELETE"])
+@limiter.limit("10 per minute", key_func=get_remote_address)
+def apagar_publico(session_id):
+    return _apagar_sessao(session_id)
 
 
 @app.route("/health", methods=["GET"])

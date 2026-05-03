@@ -9,3 +9,9 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: DB_ENCRYPTION_KEY
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false

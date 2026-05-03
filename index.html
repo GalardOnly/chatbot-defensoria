@@ -415,14 +415,35 @@
 
 <script>
   const API_BASE = window.location.origin;
-  let sessionId = sessionStorage.getItem('chat_session_id') || gerarSessionId();
+  const SESSION_ID_RE = /^sess_[a-f0-9]{64}$/;
+  let sessionId = obterOuCriarSessionId();
   let modoAtual = 'fachada';
   let consentimentoMostrado = false;
 
   sessionStorage.setItem('chat_session_id', sessionId);
 
+  function obterOuCriarSessionId() {
+    const atual = sessionStorage.getItem('chat_session_id');
+    if (atual && SESSION_ID_RE.test(atual)) {
+      return atual;
+    }
+    return gerarSessionId();
+  }
+
   function gerarSessionId() {
-    return Math.random().toString(36).slice(2, 11);
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `sess_${hex}`;
+  }
+
+  async function lerErroResposta(response, erroPadrao) {
+    try {
+      const data = await response.json();
+      return data.erro || data.detalhe || erroPadrao;
+    } catch (e) {
+      return erroPadrao;
+    }
   }
 
   function atualizarAlturaViewport() {
@@ -494,15 +515,21 @@
     if (!nome) return;
 
     try {
-      await fetch(`${API_BASE}/identificar`, {
+      const response = await fetch(`${API_BASE}/conversa/identificar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, nome })
       });
-    } catch (e) {}
+      if (!response.ok) {
+        throw new Error(await lerErroResposta(response, 'Não foi possível registrar seu nome agora.'));
+      }
 
-    fecharModal();
-    adicionarBolha('Obrigada, ' + nome + '. Estou aqui para te ajudar.', 'assistente');
+      fecharModal();
+      adicionarBolha('Obrigada, ' + nome + '. Estou aqui para te ajudar.', 'assistente');
+    } catch (e) {
+      fecharModal();
+      adicionarBolha(e.message || 'Não foi possível registrar seu nome agora. Você pode continuar sem se identificar.', 'assistente');
+    }
   }
 
   function fecharModal() {
@@ -513,20 +540,25 @@
     removerDigitando();
 
     try {
-      await fetch(`${API_BASE}/apagar/${sessionId}`, { method: 'DELETE' });
-    } catch (e) {}
+      const response = await fetch(`${API_BASE}/conversa/${sessionId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(await lerErroResposta(response, 'Não foi possível apagar a conversa agora.'));
+      }
 
-    sessionId = gerarSessionId();
-    sessionStorage.setItem('chat_session_id', sessionId);
-    modoAtual = 'fachada';
-    consentimentoMostrado = false;
-    document.getElementById('input-msg').value = '';
-    document.getElementById('input-nome').value = '';
-    document.getElementById('input-nome').classList.remove('visivel');
-    document.getElementById('btn-aceitar-consentimento').style.display = 'block';
-    document.getElementById('btn-confirmar-nome').style.display = 'none';
-    fecharModal();
-    criarMensagemInicial();
+      sessionId = gerarSessionId();
+      sessionStorage.setItem('chat_session_id', sessionId);
+      modoAtual = 'fachada';
+      consentimentoMostrado = false;
+      document.getElementById('input-msg').value = '';
+      document.getElementById('input-nome').value = '';
+      document.getElementById('input-nome').classList.remove('visivel');
+      document.getElementById('btn-aceitar-consentimento').style.display = 'block';
+      document.getElementById('btn-confirmar-nome').style.display = 'none';
+      fecharModal();
+      criarMensagemInicial();
+    } catch (e) {
+      adicionarBolha(e.message || 'Não foi possível apagar a conversa agora. Tente novamente em instantes.', 'assistente');
+    }
   }
 
   async function enviar() {
