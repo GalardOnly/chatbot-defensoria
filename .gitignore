@@ -4,3 +4,10 @@ chroma_db/
 historico.db
 __pycache__/
 .venv/
+
+# Modelos treinados — nunca versionar
+modelos/*.joblib
+modelos/modelos.manifest.json
+
+.db_salt
+historico.db
