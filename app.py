@@ -581,6 +581,9 @@ def detectar_modo_local(mensagem):
         "bater", "espanc", "marido", "namorado", "companheiro", "agressor",
         "protetiva", "delegacia", "denuncia", "machuc", "feriu", "risco",
         "humilha", "xing", "controla", "persegu", "tranca", "suficiente",
+        "psicolog", "psicológ", "pressao psicologica", "pressão psicológica",
+        "sofrendo pressao", "sofrendo pressão", "pressao em casa",
+        "pressão em casa", "me pressiona", "me manipula", "me isola",
     ]
     termos_fachada = [
         "receita", "bolo", "cozinha", "decoracao", "limpeza", "faxina",
@@ -939,14 +942,14 @@ def chat():
 
     if classificacao_indica_real or modo_local == "real":
         modo_final = "real"
-    elif modo_local == "fachada":
-        modo_final = "fachada"
     elif modo_llm == "real":
         modo_final = "real"
-    elif modo_llm == "fachada":
-        modo_final = "fachada"
     elif teve_real_recente or teve_real_no_historico:
         modo_final = "real"
+    elif modo_local == "fachada":
+        modo_final = "fachada"
+    elif modo_llm == "fachada":
+        modo_final = "fachada"
     else:
         modo_final = "fachada"
 

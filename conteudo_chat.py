@@ -1026,8 +1026,11 @@ def responder_pergunta(
         else:
             historico_limpo.append(msg)
 
-    # ── Construção do contexto RAG ────────────────────────────────────────────
-    contexto     = buscar_chunks_relevantes(pergunta_limpa, embedding_service, colecao)
+    # Contexto juridico so entra no modo real. No modo fachada, injetar chunks
+    # sobre Lei Maria da Penha fazia cumprimentos simples parecerem juridicos.
+    contexto = []
+    if modo == "real":
+        contexto = buscar_chunks_relevantes(pergunta_limpa, embedding_service, colecao)
     contexto_str = "\n".join(contexto)
 
     system_prompt = system_prompt_real if modo == "real" else system_prompt_fachada
@@ -1119,10 +1122,13 @@ def responder_pergunta(
             ),
         })
 
-    prompt_final = (
-        f"Contexto jurídico relevante:\n{contexto_str}\n\n"
-        f"{pergunta_delimitada}"
-    )
+    if modo == "real":
+        prompt_final = (
+            f"Contexto jurídico relevante:\n{contexto_str}\n\n"
+            f"{pergunta_delimitada}"
+        )
+    else:
+        prompt_final = pergunta_delimitada
     messages.append({"role": "user", "content": prompt_final})
 
     return criar_chat_groq(
