@@ -35,6 +35,19 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "historico.db")
 
 
+def _em_producao() -> bool:
+    """Detecta ambientes de deploy onde controles de seguranca devem ser obrigatorios."""
+    ambiente = (
+        os.getenv("FLASK_ENV")
+        or os.getenv("APP_ENV")
+        or os.getenv("ENV")
+        or ""
+    ).strip().lower()
+    return ambiente == "production" or bool(
+        os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL")
+    )
+
+
 # ── CRIPTOGRAFIA DE CAMPOS SENSÍVEIS ────────────────────────────────────────
 #
 # Por que criptografia no nível da aplicação (não SQLCipher)?
@@ -70,7 +83,7 @@ def _inicializar_cripto():
     """
     Deriva a chave Fernet a partir de DB_ENCRYPTION_KEY + salt persistente.
     Chamada uma vez no boot. Se DB_ENCRYPTION_KEY nao estiver definida,
-    entra em modo degradado: dados gravados em texto plano com aviso claro.
+    o processo falha para impedir gravacao de dados sensiveis em texto plano.
 
     Salt: gerado uma unica vez e gravado em .db_salt. Deve ser incluido
     no backup junto com DB_ENCRYPTION_KEY. Sem ambos, dados sao perdidos.
@@ -79,14 +92,12 @@ def _inicializar_cripto():
 
     senha = os.getenv("DB_ENCRYPTION_KEY", "").strip().encode()
     if not senha:
-        print(
-            "\n[SEGURANÇA] AVISO: DB_ENCRYPTION_KEY não definida. "
-            "Dados sensiveis serao gravados em TEXTO PLANO.\n"
-            "Gere uma chave: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
-            "e adicione ao .env como DB_ENCRYPTION_KEY=<valor>\n"
+        raise RuntimeError(
+            "[SEGURANCA] DB_ENCRYPTION_KEY nao definida. "
+            "O servidor nao inicia para evitar gravar dados sensiveis em texto plano. "
+            "Gere uma chave com: python -c \"import secrets; print(secrets.token_hex(32))\" "
+            "e configure DB_ENCRYPTION_KEY no ambiente."
         )
-        _CRIPTO_ATIVA = False
-        return
 
     if os.path.exists(_SALT_FILE):
         with open(_SALT_FILE, "rb") as f:
@@ -545,19 +556,22 @@ app = Flask(__name__)
 # Em desenvolvimento, defina ALLOWED_ORIGIN=http://localhost:5000 no .env.
 # Em produção, defina ALLOWED_ORIGIN=https://seu-dominio.com
 #
-# Se ALLOWED_ORIGIN não estiver definida, logamos um aviso mas permitimos
-# qualquer origem para não travar o ambiente de desenvolvimento local.
-# NUNCA deixe ALLOWED_ORIGIN indefinida em produção.
+# Se ALLOWED_ORIGIN nao estiver definida em producao, o servidor falha no boot.
+# Em desenvolvimento, liberamos apenas localhost explicito.
 _ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").strip()
-if _ALLOWED_ORIGIN:
-    CORS(app, origins=[_ALLOWED_ORIGIN], supports_credentials=False)
-    print(f"[CORS] Origem permitida: {_ALLOWED_ORIGIN}")
+_ALLOWED_ORIGINS = [o.strip() for o in _ALLOWED_ORIGIN.split(",") if o.strip()]
+if _ALLOWED_ORIGINS:
+    CORS(app, origins=_ALLOWED_ORIGINS, supports_credentials=False)
+    print(f"[CORS] Origens permitidas: {', '.join(_ALLOWED_ORIGINS)}")
 else:
-    CORS(app)
-    print(
-        "[CORS] AVISO: ALLOWED_ORIGIN não definida — aceitando qualquer origem.\n"
-        "       Defina ALLOWED_ORIGIN=https://seu-dominio.com no .env para produção."
-    )
+    if _em_producao():
+        raise RuntimeError(
+            "[SEGURANCA] ALLOWED_ORIGIN nao definida em producao. "
+            "Configure a origem publica exata, por exemplo https://seu-dominio.com."
+        )
+    _ORIGENS_DEV = ["http://localhost:5000", "http://127.0.0.1:5000"]
+    CORS(app, origins=_ORIGENS_DEV, supports_credentials=False)
+    print(f"[CORS] ALLOWED_ORIGIN ausente; usando origens locais: {', '.join(_ORIGENS_DEV)}")
 
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 # Proteção contra abuso do endpoint /chat em duas camadas:
@@ -971,6 +985,9 @@ def identificar_publico():
 @app.route("/conversa/<session_id>", methods=["DELETE"])
 @limiter.limit("10 per minute", key_func=get_remote_address)
 def apagar_publico(session_id):
+    confirmacao = request.headers.get("X-Session-Confirm", "").strip()
+    if not hmac.compare_digest(confirmacao, session_id):
+        return jsonify({"erro": "Confirmacao da sessao obrigatoria."}), 403
     return _apagar_sessao(session_id)
 
 

@@ -7,7 +7,7 @@ __pycache__/
 
 # Modelos treinados — nunca versionar
 modelos/*.joblib
+modelos/*.pkl
 modelos/modelos.manifest.json
 
 .db_salt
-historico.db

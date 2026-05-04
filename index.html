@@ -540,7 +540,10 @@
     removerDigitando();
 
     try {
-      const response = await fetch(`${API_BASE}/conversa/${sessionId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE}/conversa/${sessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Session-Confirm': sessionId }
+      });
       if (!response.ok) {
         throw new Error(await lerErroResposta(response, 'Não foi possível apagar a conversa agora.'));
       }

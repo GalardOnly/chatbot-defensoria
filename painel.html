@@ -255,10 +255,10 @@
 
 <script>
   const API_BASE = window.location.origin;
-  const TOKEN_STORAGE_KEY = 'painel_admin_token';
   let sessoesConhecidas = {};
   let filtroReal = false;
-  let adminToken = sessionStorage.getItem(TOKEN_STORAGE_KEY) || '';
+  let adminToken = '';
+  sessionStorage.removeItem('painel_admin_token');
 
   function headersAdmin(extra = {}) {
     return {
@@ -289,7 +289,6 @@
       }
 
       adminToken = token;
-      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
       document.getElementById('erro-login').textContent = '';
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('painel-screen').style.display = 'block';
@@ -301,7 +300,6 @@
 
   function logout() {
     adminToken = '';
-    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('painel-screen').style.display = 'none';
     document.getElementById('token-admin').value = '';
@@ -437,10 +435,6 @@
     return palavras.some(p => lower.includes(p)) ? 'real' : 'fachada';
   }
 
-  if (adminToken) {
-    document.getElementById('token-admin').value = adminToken;
-    login();
-  }
 </script>
 </body>
 </html>
