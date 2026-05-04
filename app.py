@@ -552,14 +552,19 @@ Responda apenas: REAL ou FACHADA"""
 app = Flask(__name__)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-# Permitimos apenas a origem configurada em ALLOWED_ORIGIN.
+# Permitimos apenas as origens configuradas em ALLOWED_ORIGIN.
 # Em desenvolvimento, defina ALLOWED_ORIGIN=http://localhost:5000 no .env.
 # Em produção, defina ALLOWED_ORIGIN=https://seu-dominio.com
+# No Render, se ALLOWED_ORIGIN nao estiver definida, usamos RENDER_EXTERNAL_URL.
 #
-# Se ALLOWED_ORIGIN nao estiver definida em producao, o servidor falha no boot.
+# Se nenhuma origem segura existir em producao, o servidor falha no boot.
 # Em desenvolvimento, liberamos apenas localhost explicito.
 _ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").strip()
 _ALLOWED_ORIGINS = [o.strip() for o in _ALLOWED_ORIGIN.split(",") if o.strip()]
+if not _ALLOWED_ORIGINS:
+    _RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    if _RENDER_EXTERNAL_URL:
+        _ALLOWED_ORIGINS = [_RENDER_EXTERNAL_URL]
 if _ALLOWED_ORIGINS:
     CORS(app, origins=_ALLOWED_ORIGINS, supports_credentials=False)
     print(f"[CORS] Origens permitidas: {', '.join(_ALLOWED_ORIGINS)}")
