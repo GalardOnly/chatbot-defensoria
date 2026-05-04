@@ -33,6 +33,9 @@ from dotenv import load_dotenv
 load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "historico.db")
+_PERMITIR_TEXTO_PLANO_LEGADO = os.getenv("ALLOW_LEGACY_PLAINTEXT_DB", "").lower() in {
+    "1", "true", "sim", "yes"
+}
 
 
 def _em_producao() -> bool:
@@ -142,11 +145,12 @@ def cifrar(texto):
     return _FERNET.encrypt(texto.encode("utf-8")).decode("utf-8")
 
 
-def decifrar(token):
+def decifrar(token, session_id: str = ""):
     """
     Decifra um token Fernet. Retorna o texto original.
-    Trata dados legados (texto plano anterior a criptografia) devolvendo
-    o valor original sem excecao — evita quebrar historico existente.
+    Falhas de decifragem nao devolvem o valor bruto por padrao.
+    Para uma migracao pontual de dados legados em texto plano, defina
+    ALLOW_LEGACY_PLAINTEXT_DB=true temporariamente.
     """
     if not token:
         return ""
@@ -154,10 +158,21 @@ def decifrar(token):
         return token
     try:
         return _FERNET.decrypt(token.encode("utf-8")).decode("utf-8")
-    except Exception:
-        # Dado legado em texto plano ou corrompido
-        print("[Cripto] AVISO: token nao decifrado — pode ser dado legado.")
-        return token
+    except InvalidToken:
+        print(
+            "[Cripto] WARNING: token invalido ao decifrar "
+            f"session={session_id or '?'}."
+        )
+        if _PERMITIR_TEXTO_PLANO_LEGADO:
+            print("[Cripto] AVISO: retornando dado legado por configuracao explicita.")
+            return token
+        return ""
+    except Exception as e:
+        print(
+            "[Cripto] WARNING: falha inesperada ao decifrar "
+            f"session={session_id or '?'}: {e}"
+        )
+        return ""
 
 
 # ── AUTENTICAÇÃO ADMINISTRATIVA ──────────────────────────────────────────────
@@ -277,10 +292,70 @@ def requer_admin(f):
 # session_id vem do frontend e é usado em queries SQL parametrizadas (seguro),
 # mas ainda assim limitamos o formato para evitar IDs absurdos em logs e no banco.
 _SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]{8,128}$')
+_SESSION_DELETE_TOKEN_RE = re.compile(r'^[a-f0-9]{64}$')
 
 
 def session_id_valido(session_id: str) -> bool:
     return bool(session_id and _SESSION_ID_RE.match(session_id))
+
+
+def gerar_session_id() -> str:
+    return f"sess_{secrets.token_hex(32)}"
+
+
+def gerar_token_delecao() -> str:
+    return secrets.token_hex(32)
+
+
+def hash_token_delecao(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def registrar_sessao() -> tuple[str, str]:
+    """
+    Cria uma sessao publica com token secreto de delecao.
+    O banco guarda apenas o hash do token; o token bruto fica no navegador.
+    """
+    conn = obter_conexao_db()
+    c    = conn.cursor()
+    try:
+        for _ in range(5):
+            session_id = gerar_session_id()
+            delete_token = gerar_token_delecao()
+            try:
+                c.execute(
+                    """INSERT INTO sessoes (session_id, delete_token_hash, timestamp)
+                       VALUES (?, ?, ?)""",
+                    (
+                        session_id,
+                        hash_token_delecao(delete_token),
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+                conn.commit()
+                return session_id, delete_token
+            except sqlite3.IntegrityError:
+                continue
+        raise RuntimeError("Nao foi possivel gerar session_id unico.")
+    finally:
+        conn.close()
+
+
+def token_delecao_valido(session_id: str, token: str) -> bool:
+    if not session_id_valido(session_id):
+        return False
+    if not token or not _SESSION_DELETE_TOKEN_RE.match(token):
+        return False
+
+    conn = obter_conexao_db()
+    c    = conn.cursor()
+    c.execute("SELECT delete_token_hash FROM sessoes WHERE session_id = ?", (session_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return False
+
+    return hmac.compare_digest(row[0], hash_token_delecao(token))
 
 
 def obter_conexao_db():
@@ -330,6 +405,13 @@ def init_db():
             timestamp    TEXT
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sessoes (
+            session_id          TEXT PRIMARY KEY,
+            delete_token_hash   TEXT NOT NULL,
+            timestamp           TEXT NOT NULL
+        )
+    """)
     # Migracoes seguras de schema — novas colunas adicionadas sem quebrar instalacoes antigas
     colunas_novas = [
         ("tipo_violencia",       "TEXT"),
@@ -340,7 +422,19 @@ def init_db():
         ("feat_risco_imediato",  "INTEGER DEFAULT 0"),
         ("feat_primeiro_relato", "INTEGER DEFAULT 0"),
     ]
+    colunas_permitidas = {
+        "tipo_violencia",
+        "gravidade",
+        "feat_menciona_arma",
+        "feat_menciona_menor",
+        "feat_menciona_saida",
+        "feat_risco_imediato",
+        "feat_primeiro_relato",
+    }
+    tipos_permitidos = {"TEXT", "INTEGER DEFAULT 0"}
     for coluna, tipo in colunas_novas:
+        if coluna not in colunas_permitidas or tipo not in tipos_permitidos:
+            raise RuntimeError(f"Migracao invalida para historico: {coluna} {tipo}")
         try:
             c.execute(f"ALTER TABLE historico ADD COLUMN {coluna} {tipo}")
         except sqlite3.OperationalError:
@@ -448,8 +542,10 @@ def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=N
             feats["feat_primeiro_relato"],
         ),
     )
+    mensagem_id = c.lastrowid
     conn.commit()
     conn.close()
+    return mensagem_id
 
 
 def carregar_historico(session_id):
@@ -465,7 +561,7 @@ def carregar_historico(session_id):
     return [
         {
             "role":           row[0],
-            "mensagem":       decifrar(row[1]),   # decifrado ao sair do banco
+            "mensagem":       decifrar(row[1], session_id),   # decifrado ao sair do banco
             "timestamp":      row[2],
             "tipo_violencia": row[3],
             "gravidade":      row[4],
@@ -515,9 +611,10 @@ def historico_indica_fachada(historico):
     return False
 
 
-def detectar_modo(mensagem, historico=None):
+def detectar_modo(mensagem, historico=None, session_id: str = ""):
     historico = historico or []
-    modo_local = detectar_modo_local(mensagem)
+    mensagem_limpa, _ = sanitizar_mensagem(mensagem, session_id)
+    modo_local = detectar_modo_local(mensagem_limpa)
     if modo_local == "indefinido" and historico_indica_fachada(historico):
         modo_local = "fachada"
     if modo_local == "real":
@@ -530,7 +627,14 @@ def detectar_modo(mensagem, historico=None):
             for m in historico if m["role"] == "user"
         ) else modo_local
 
-    contexto = "\n".join([f"{m['role']}: {m['mensagem']}" for m in historico[-4:]])
+    contexto_linhas = []
+    for m in historico[-4:]:
+        role = m.get("role", "?")
+        texto = m.get("mensagem", "")
+        if role == "user":
+            texto, _ = sanitizar_mensagem(texto, session_id)
+        contexto_linhas.append(f"{role}: {texto}")
+    contexto = "\n".join(contexto_linhas)
     prompt = f"""Analise a mensagem abaixo e responda apenas com uma palavra: REAL ou FACHADA.
 
 REAL = a pessoa pode estar em situação de violência doméstica, risco, medo, controle, abuso ou precisando de ajuda urgente. Em caso de dúvida, classifique como REAL.
@@ -539,7 +643,7 @@ FACHADA = apenas perguntas claramente sobre casa, culinária, decoração ou lim
 Histórico recente:
 {contexto}
 
-Mensagem atual: {mensagem}
+Mensagem atual: {mensagem_limpa}
 
 Responda apenas: REAL ou FACHADA"""
 
@@ -784,7 +888,7 @@ def chat():
     # mas usamos a versão limpa em todas as operações subsequentes.
     mensagem_limpa, alertas = sanitizar_mensagem(mensagem, session_id)
 
-    salvar_mensagem(session_id, "user", mensagem)   # banco recebe original
+    mensagem_id = salvar_mensagem(session_id, "user", mensagem)   # banco recebe original
     historico_sessao = carregar_historico(session_id)
 
     # garantir_servicos() retorna False se o boot ainda não terminou após 60s.
@@ -808,10 +912,8 @@ def chat():
             c    = conn.cursor()
             c.execute(
                 """UPDATE historico SET tipo_violencia = ?, gravidade = ?
-                   WHERE session_id = ? AND role = 'user'
-                   AND id = (SELECT MAX(id) FROM historico
-                             WHERE session_id = ? AND role = 'user')""",
-                (classificacao["tipo"], classificacao["gravidade"], session_id, session_id),
+                   WHERE id = ? AND session_id = ? AND role = 'user'""",
+                (classificacao["tipo"], classificacao["gravidade"], mensagem_id, session_id),
             )
             conn.commit()
             conn.close()
@@ -830,7 +932,7 @@ def chat():
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
     modo_local = detectar_modo_local(mensagem_limpa)
     try:
-        modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao)
+        modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao, session_id=session_id)
     except Exception as e:
         print(f"[chat] Aviso ao detectar modo: {e}")
         modo_llm = "real" if (teve_real_recente or classificacao_indica_real) else "fachada"
@@ -896,7 +998,7 @@ def sessoes():
     try:
         c.execute("SELECT session_id, nome FROM identificacao")
         for row in c.fetchall():
-            identificacoes[row[0]] = decifrar(row[1])   # decifrado ao sair do banco
+            identificacoes[row[0]] = decifrar(row[1], row[0])   # decifrado ao sair do banco
     except Exception:
         pass
     conn.close()
@@ -966,6 +1068,7 @@ def _apagar_sessao(session_id: str):
     c    = conn.cursor()
     c.execute("DELETE FROM historico     WHERE session_id = ?", (session_id,))
     c.execute("DELETE FROM identificacao WHERE session_id = ?", (session_id,))
+    c.execute("DELETE FROM sessoes       WHERE session_id = ?", (session_id,))
     conn.commit()
     conn.close()
 
@@ -990,6 +1093,16 @@ def apagar_admin(session_id):
     return _apagar_sessao(session_id)
 
 
+@app.route("/conversa/sessao", methods=["POST"])
+@limiter.limit("20 per minute", key_func=get_remote_address)
+def criar_sessao_publica():
+    session_id, delete_token = registrar_sessao()
+    return jsonify({
+        "session_id": session_id,
+        "delete_token": delete_token,
+    })
+
+
 @app.route("/conversa/identificar", methods=["POST"])
 @limiter.limit("10 per minute", key_func=_chave_session_ou_ip)
 def identificar_publico():
@@ -999,9 +1112,9 @@ def identificar_publico():
 @app.route("/conversa/<session_id>", methods=["DELETE"])
 @limiter.limit("10 per minute", key_func=get_remote_address)
 def apagar_publico(session_id):
-    confirmacao = request.headers.get("X-Session-Confirm", "").strip()
-    if not hmac.compare_digest(confirmacao, session_id):
-        return jsonify({"erro": "Confirmacao da sessao obrigatoria."}), 403
+    token = request.headers.get("X-Session-Token", "").strip()
+    if not token_delecao_valido(session_id, token):
+        return jsonify({"erro": "Token de sessao obrigatorio ou invalido."}), 403
     return _apagar_sessao(session_id)
 
 
@@ -1015,6 +1128,24 @@ def health():
     return jsonify({
         "status":           "ok",
         "servicos_prontos": _servicos_prontos,
+    })
+
+
+@app.route("/ready", methods=["GET"])
+@limiter.exempt
+def ready():
+    """
+    Readiness check: use este endpoint quando o monitor precisa saber se
+    o chatbot ja consegue responder com os servicos carregados.
+    """
+    if not _servicos_prontos:
+        return jsonify({
+            "status": "starting",
+            "servicos_prontos": False,
+        }), 503
+    return jsonify({
+        "status": "ready",
+        "servicos_prontos": True,
     })
 
 

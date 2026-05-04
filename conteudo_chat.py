@@ -463,6 +463,8 @@ class ClassificadorViolencia:
             manifest = json.load(f)
 
         arquivos = manifest.get("arquivos", {})
+        limiares = manifest.get("limiares", {})
+        self.limiar_gravidade_alta = float(limiares.get("gravidade_alta", 0.5))
 
         def _hash_de(nome_modelo: str) -> str:
             entrada = arquivos.get(nome_modelo)
@@ -493,7 +495,8 @@ class ClassificadorViolencia:
         print(
             f"  [Classificador] Modelos prontos | gerado em {gerado_em} | "
             f"F1-tipo={metricas.get('tipo_f1_cv_media', '?')} "
-            f"F1-grav={metricas.get('gravidade_f1_cv_media', '?')}"
+            f"F1-grav={metricas.get('gravidade_f1_cv_media', '?')} "
+            f"limiar-alta={self.limiar_gravidade_alta:.4f}"
         )
 
     def classificar(self, texto: str) -> dict:
@@ -509,8 +512,14 @@ class ClassificadorViolencia:
         tipo      = self.pipeline_tipo.predict([texto])[0]
         tipo_prob = float(self.pipeline_tipo.predict_proba([texto]).max())
 
-        gravidade = self.pipeline_gravidade.predict([texto])[0]
-        grav_prob = float(self.pipeline_gravidade.predict_proba([texto]).max())
+        classes_grav = list(self.pipeline_gravidade.classes_)
+        probs_grav   = self.pipeline_gravidade.predict_proba([texto])[0]
+        gravidade    = classes_grav[int(np.argmax(probs_grav))]
+        if "alta" in classes_grav:
+            idx_alta = classes_grav.index("alta")
+            if probs_grav[idx_alta] >= self.limiar_gravidade_alta:
+                gravidade = "alta"
+        grav_prob = float(probs_grav[classes_grav.index(gravidade)])
 
         confianca_ok = tipo_prob >= self.limiar_confianca
         eh_violencia = (tipo != self.classe_neutra) and confianca_ok
@@ -713,6 +722,8 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
     Isso garante que alteracoes no Guia Completo sejam refletidas sem
     gerar embeddings contraditorios que causariam alucinacao na LLM.
     """
+    global _colecao_populada
+
     if embedding_service is None:
         print("[RAG] EmbeddingService indisponivel. Seguindo sem indexacao.")
         return
@@ -733,6 +744,7 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
         hash_indexado = _hash_atual_na_colecao(colecao)
         if hash_indexado == hash_docx:
             print("[RAG] Colecao atualizada (hash ok). Nenhuma re-indexacao necessaria.")
+            _colecao_populada = True
             return
         print(
             f"[RAG] Hash do documento mudou "
@@ -743,6 +755,7 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
             ids_existentes = colecao.get()["ids"]
             if ids_existentes:
                 colecao.delete(ids=ids_existentes)
+                _colecao_populada = None
         except Exception as e2:
             print(f"[RAG] AVISO: nao foi possivel limpar colecao: {e2}")
 
@@ -752,6 +765,7 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
     embeddings = embedding_service.embed(chunks)
     armazenar_chunks_com_embeddings(chunks, embeddings, colecao)
     _salvar_hash_na_colecao(colecao, hash_docx)
+    _colecao_populada = True
     print(f"[RAG] Indexacao concluida. Hash {hash_docx[:16]}... registrado.")
 
 

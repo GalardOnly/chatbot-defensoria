@@ -416,25 +416,34 @@
 <script>
   const API_BASE = window.location.origin;
   const SESSION_ID_RE = /^sess_[a-f0-9]{64}$/;
-  let sessionId = obterOuCriarSessionId();
+  const SESSION_DELETE_TOKEN_RE = /^[a-f0-9]{64}$/;
+  let sessionId = sessionStorage.getItem('chat_session_id') || '';
+  let deleteToken = sessionStorage.getItem('chat_delete_token') || '';
   let modoAtual = 'fachada';
   let consentimentoMostrado = false;
 
-  sessionStorage.setItem('chat_session_id', sessionId);
-
-  function obterOuCriarSessionId() {
-    const atual = sessionStorage.getItem('chat_session_id');
-    if (atual && SESSION_ID_RE.test(atual)) {
-      return atual;
+  async function criarSessaoServidor() {
+    const response = await fetch(`${API_BASE}/conversa/sessao`, { method: 'POST' });
+    if (!response.ok) {
+      throw new Error(await lerErroResposta(response, 'Nao foi possivel iniciar a sessao agora.'));
     }
-    return gerarSessionId();
+
+    const data = await response.json();
+    if (!SESSION_ID_RE.test(data.session_id || '') || !SESSION_DELETE_TOKEN_RE.test(data.delete_token || '')) {
+      throw new Error('Sessao invalida retornada pelo servidor.');
+    }
+
+    sessionId = data.session_id;
+    deleteToken = data.delete_token;
+    sessionStorage.setItem('chat_session_id', sessionId);
+    sessionStorage.setItem('chat_delete_token', deleteToken);
   }
 
-  function gerarSessionId() {
-    const bytes = new Uint8Array(32);
-    window.crypto.getRandomValues(bytes);
-    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    return `sess_${hex}`;
+  async function garantirSessao() {
+    if (SESSION_ID_RE.test(sessionId) && SESSION_DELETE_TOKEN_RE.test(deleteToken)) {
+      return;
+    }
+    await criarSessaoServidor();
   }
 
   async function lerErroResposta(response, erroPadrao) {
@@ -515,6 +524,7 @@
     if (!nome) return;
 
     try {
+      await garantirSessao();
       const response = await fetch(`${API_BASE}/conversa/identificar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -540,16 +550,16 @@
     removerDigitando();
 
     try {
+      await garantirSessao();
       const response = await fetch(`${API_BASE}/conversa/${sessionId}`, {
         method: 'DELETE',
-        headers: { 'X-Session-Confirm': sessionId }
+        headers: { 'X-Session-Token': deleteToken }
       });
       if (!response.ok) {
         throw new Error(await lerErroResposta(response, 'Não foi possível apagar a conversa agora.'));
       }
 
-      sessionId = gerarSessionId();
-      sessionStorage.setItem('chat_session_id', sessionId);
+      await criarSessaoServidor();
       modoAtual = 'fachada';
       consentimentoMostrado = false;
       document.getElementById('input-msg').value = '';
@@ -569,11 +579,12 @@
     const mensagem = input.value.trim();
     if (!mensagem) return;
 
-    input.value = '';
-    adicionarBolha(mensagem, 'usuario');
-    mostrarDigitando();
-
     try {
+      await garantirSessao();
+      input.value = '';
+      adicionarBolha(mensagem, 'usuario');
+      mostrarDigitando();
+
       const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -615,6 +626,7 @@
   });
 
   criarMensagemInicial();
+  garantirSessao().catch(() => {});
 </script>
 </body>
 </html>
