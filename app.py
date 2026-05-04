@@ -83,20 +83,29 @@ def _inicializar_cripto():
     """
     Deriva a chave Fernet a partir de DB_ENCRYPTION_KEY + salt persistente.
     Chamada uma vez no boot. Se DB_ENCRYPTION_KEY nao estiver definida,
-    o processo falha para impedir gravacao de dados sensiveis em texto plano.
+    usa ADMIN_TOKEN como segredo de emergencia para impedir texto plano.
 
     Salt: gerado uma unica vez e gravado em .db_salt. Deve ser incluido
     no backup junto com DB_ENCRYPTION_KEY. Sem ambos, dados sao perdidos.
     """
     global _FERNET, _CRIPTO_ATIVA
 
-    senha = os.getenv("DB_ENCRYPTION_KEY", "").strip().encode()
+    senha_texto = os.getenv("DB_ENCRYPTION_KEY", "").strip()
+    if not senha_texto:
+        token_admin = os.getenv("ADMIN_TOKEN", "").strip()
+        if token_admin:
+            print(
+                "[SEGURANCA] AVISO: DB_ENCRYPTION_KEY nao definida. "
+                "Usando ADMIN_TOKEN como segredo de criptografia de emergencia. "
+                "Configure DB_ENCRYPTION_KEY propria no Render assim que possivel."
+            )
+            senha_texto = f"fallback-db-key:{token_admin}"
+
+    senha = senha_texto.encode()
     if not senha:
         raise RuntimeError(
             "[SEGURANCA] DB_ENCRYPTION_KEY nao definida. "
-            "O servidor nao inicia para evitar gravar dados sensiveis em texto plano. "
-            "Gere uma chave com: python -c \"import secrets; print(secrets.token_hex(32))\" "
-            "e configure DB_ENCRYPTION_KEY no ambiente."
+            "ADMIN_TOKEN tambem ausente, entao nao ha segredo disponivel para criptografia."
         )
 
     if os.path.exists(_SALT_FILE):
