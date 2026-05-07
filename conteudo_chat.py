@@ -285,6 +285,102 @@ _PADROES_INJECTION: list[tuple[str, re.Pattern]] = [
 _MARCADOR_SANITIZADO = "[mensagem inválida removida]"
 
 
+_MARCADOR_PII = "[dado pessoal removido]"
+
+_PADROES_PII: list[tuple[str, re.Pattern]] = [
+    ("cpf", re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")),
+    ("cnpj", re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")),
+    ("email", re.compile(
+        r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+        re.IGNORECASE,
+    )),
+    ("telefone", re.compile(
+        r"(?<!\d)(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-\s]?\d{4}(?!\d)"
+    )),
+    ("cep", re.compile(r"\b\d{5}-?\d{3}\b")),
+    ("rg", re.compile(r"\bRG\s*[:#]?\s*[0-9A-Za-z.\-]{5,14}\b", re.IGNORECASE)),
+    ("endereco", re.compile(
+        r"\b(?:rua|r\.|avenida|av\.|travessa|tv\.|rodovia|estrada|alameda|"
+        r"praca|praça|passagem|conjunto|bairro)\s+"
+        r"[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'ºª-]{2,80}"
+        r"(?:,\s*)?(?:n[ºo]\.?\s*)?\d+[A-Za-z0-9\-/]*",
+        re.IGNORECASE,
+    )),
+]
+
+_PADRAO_NOME_DECLARADO = re.compile(
+    r"\b((?:meu nome\s+(?:e|é)|me chamo|chamo-me)\s+)"
+    r"[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]*"
+    r"(?:\s+(?:de|da|do|dos|das|e|[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]*)){0,4}",
+    re.IGNORECASE,
+)
+
+_NOME_PESSOA = (
+    r"(?:[^\W\d_]+(?:['-][^\W\d_]+)*)"
+    r"(?:\s+(?:de|da|do|dos|das|e|[^\W\d_]+(?:['-][^\W\d_]+)*)){0,4}"
+)
+
+_NOME_PROPRIO = (
+    r"[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]*"
+    r"(?:\s+(?:de|da|do|dos|das|e|[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]*)){0,4}"
+)
+
+_PADROES_NOME_PII: list[re.Pattern] = [
+    _PADRAO_NOME_DECLARADO,
+    re.compile(r"\b((?:[Ee]u\s+sou|[Ss]ou)\s+)" + _NOME_PROPRIO),
+    re.compile(
+        r"\b((?:nome\s+d(?:ele|ela)\s+(?:e|é|eh)|"
+        r"nome\s+d[oa]\s+(?:agressor|agressora|marido|companheiro|"
+        r"companheira|namorado|namorada|esposo|esposa|ex)\s+(?:e|é|eh))\s+)"
+        + _NOME_PESSOA,
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(((?:meu|minha|o|a)\s+(?:marido|companheiro|companheira|"
+        r"namorado|namorada|esposo|esposa|ex|ex-marido|ex-esposa|"
+        r"agressor|agressora|pai|mae|mãe|padrasto|madrasta|irmao|irmão)"
+        r"\s+(?:se\s+chama|chama-se))\s+)"
+        + _NOME_PESSOA,
+        re.IGNORECASE,
+    ),
+]
+
+
+def redigir_pii(texto: str, session_id: str = "", contexto: str = "provedor") -> str:
+    """
+    Remove identificadores diretos antes de enviar texto a provedores externos.
+
+    A mensagem original continua preservada no banco cifrado; esta versao e
+    usada apenas para embeddings, prompts e classificacoes via LLM externa.
+    """
+    if not texto:
+        return ""
+
+    grupos: list[str] = []
+    texto_redigido = texto
+
+    def _substituir_nome(match: re.Match) -> str:
+        grupos.append("nome")
+        return f"{match.group(1)}{_MARCADOR_PII}"
+
+    for padrao_nome in _PADROES_NOME_PII:
+        texto_redigido = padrao_nome.sub(_substituir_nome, texto_redigido)
+
+    for grupo, padrao in _PADROES_PII:
+        if padrao.search(texto_redigido):
+            grupos.append(grupo)
+            texto_redigido = padrao.sub(_MARCADOR_PII, texto_redigido)
+
+    if texto_redigido != texto:
+        grupos_unicos = list(dict.fromkeys(grupos or ["nome"]))
+        print(
+            f"[PRIVACY] PII redigida antes de {contexto} | "
+            f"session={session_id or '?'} | grupos={grupos_unicos}"
+        )
+
+    return texto_redigido
+
+
 def sanitizar_mensagem(texto: str, session_id: str = "") -> tuple[str, list[str]]:
     """
     Aplica filtros de injection ao texto. Nunca bloqueia — substitui o trecho
@@ -1011,6 +1107,11 @@ def responder_pergunta(
     # Se padrões forem encontrados, são substituídos e logados — mas a conversa
     # continua normalmente para não prejudicar vítimas reais.
     pergunta_limpa, alertas_pergunta = sanitizar_mensagem(pergunta, session_id)
+    pergunta_provedor = redigir_pii(
+        pergunta_limpa,
+        session_id=session_id,
+        contexto="embedding/llm",
+    )
 
     # ── CAMADA 2: truncar e sanitizar o histórico ─────────────────────────────
     # Primeiro truncamos por tokens (impede injection passiva via histórico longo),
@@ -1018,19 +1119,28 @@ def responder_pergunta(
     historico_truncado = truncar_historico(historico, max_tokens=HISTORICO_MAX_TOKENS)
 
     historico_limpo = []
+    historico_provedor = []
     for msg in historico_truncado:
         conteudo_original = msg.get("content") or ""
         if msg.get("role") == "user" and conteudo_original:
             conteudo_limpo, _ = sanitizar_mensagem(conteudo_original, session_id)
-            historico_limpo.append({**msg, "content": conteudo_limpo})
+            msg_limpa = {**msg, "content": conteudo_limpo}
         else:
-            historico_limpo.append(msg)
+            msg_limpa = msg
+        historico_limpo.append(msg_limpa)
+
+        conteudo_provedor = redigir_pii(
+            msg_limpa.get("content") or "",
+            session_id=session_id,
+            contexto="historico llm",
+        )
+        historico_provedor.append({**msg_limpa, "content": conteudo_provedor})
 
     # Contexto juridico so entra no modo real. No modo fachada, injetar chunks
     # sobre Lei Maria da Penha fazia cumprimentos simples parecerem juridicos.
     contexto = []
     if modo == "real":
-        contexto = buscar_chunks_relevantes(pergunta_limpa, embedding_service, colecao)
+        contexto = buscar_chunks_relevantes(pergunta_provedor, embedding_service, colecao)
     contexto_str = "\n".join(contexto)
 
     system_prompt = system_prompt_real if modo == "real" else system_prompt_fachada
@@ -1054,7 +1164,7 @@ def responder_pergunta(
     if prefixo_classificacao:
         messages.append({"role": "system", "content": prefixo_classificacao})
 
-    dialogo_recente = extrair_dialogo_recente(historico_limpo)
+    dialogo_recente = extrair_dialogo_recente(historico_provedor)
     messages.append({
         "role": "system",
         "content": (
@@ -1066,7 +1176,7 @@ def responder_pergunta(
     })
 
     if modo == "real":
-        fatos_recentes = extrair_fatos_recentes(historico_limpo)
+        fatos_recentes = extrair_fatos_recentes(historico_provedor)
         messages.append({
             "role": "system",
             "content": (
@@ -1079,7 +1189,7 @@ def responder_pergunta(
         })
 
     # Histórico sanitizado e truncado como mensagens de conversa
-    for msg in historico_limpo[-5:]:
+    for msg in historico_provedor[-5:]:
         messages.append(msg)
 
     # ── CAMADA 3: delimitar o conteúdo do usuário no prompt final ─────────────
@@ -1087,7 +1197,7 @@ def responder_pergunta(
     # à LLM exatamente onde começa e termina conteúdo não-confiável.
     # Isso dificulta ataques que tentam "fechar" um bloco de instrução dentro
     # da mensagem do usuário e abrir outro.
-    pergunta_delimitada = delimitar_conteudo_usuario(pergunta_limpa)
+    pergunta_delimitada = delimitar_conteudo_usuario(pergunta_provedor)
 
     # ── Detecção de município e injeção de contatos ──────────────────────────
     # Procura o nome de um município do Pará na pergunta atual ou nas últimas

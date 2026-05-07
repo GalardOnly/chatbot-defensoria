@@ -11,6 +11,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
+from werkzeug.exceptions import RequestEntityTooLarge
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -23,6 +24,7 @@ from conteudo_chat import (
     ClassificadorViolencia,
     garantir_base_conhecimento,
     sanitizar_mensagem,
+    redigir_pii,
 )
 import chromadb
 import os
@@ -617,6 +619,11 @@ def historico_indica_fachada(historico):
 def detectar_modo(mensagem, historico=None, session_id: str = ""):
     historico = historico or []
     mensagem_limpa, _ = sanitizar_mensagem(mensagem, session_id)
+    mensagem_provedor = redigir_pii(
+        mensagem_limpa,
+        session_id=session_id,
+        contexto="detectar_modo",
+    )
     modo_local = detectar_modo_local(mensagem_limpa)
     if modo_local == "indefinido" and historico_indica_fachada(historico):
         modo_local = "fachada"
@@ -636,6 +643,7 @@ def detectar_modo(mensagem, historico=None, session_id: str = ""):
         texto = m.get("mensagem", "")
         if role == "user":
             texto, _ = sanitizar_mensagem(texto, session_id)
+        texto = redigir_pii(texto, session_id=session_id, contexto="detectar_modo")
         contexto_linhas.append(f"{role}: {texto}")
     contexto = "\n".join(contexto_linhas)
     prompt = f"""Analise a mensagem abaixo e responda apenas com uma palavra: REAL ou FACHADA.
@@ -646,7 +654,7 @@ FACHADA = apenas perguntas claramente sobre casa, culinária, decoração ou lim
 Histórico recente:
 {contexto}
 
-Mensagem atual: {mensagem_limpa}
+Mensagem atual: {mensagem_provedor}
 
 Responda apenas: REAL ou FACHADA"""
 
@@ -666,6 +674,13 @@ Responda apenas: REAL ou FACHADA"""
 
 # ── FLASK APP ────────────────────────────────────────────────────────────────
 app = Flask(__name__)
+try:
+    _MAX_JSON_BYTES = int(os.getenv("MAX_JSON_BYTES", "16384"))
+except ValueError as e:
+    raise RuntimeError("MAX_JSON_BYTES deve ser um inteiro.") from e
+if _MAX_JSON_BYTES < 4096:
+    raise RuntimeError("MAX_JSON_BYTES muito baixo; use pelo menos 4096 bytes.")
+app.config["MAX_CONTENT_LENGTH"] = _MAX_JSON_BYTES
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 # Permitimos apenas as origens configuradas em ALLOWED_ORIGIN.
@@ -714,17 +729,12 @@ else:
 
 def _chave_session_ou_ip() -> str:
     """
-    Usa session_id como chave de rate limit quando disponível,
-    caindo de volta para IP quando ausente (ex: requisições malformadas).
-    Isso evita que um atacante que muda de IP constantemente contorne o limite.
+    Usa session_id do header como chave de rate limit, sem parsear JSON.
+    O fallback por IP cobre requisicoes sem sessao ou malformadas.
     """
-    try:
-        data = request.get_json(silent=True) or {}
-        sid  = (data.get("session_id") or "").strip()
-        if sid and _SESSION_ID_RE.match(sid):
-            return f"session:{sid}"
-    except Exception:
-        pass
+    sid = request.headers.get("X-Session-Id", "").strip()
+    if sid and _SESSION_ID_RE.match(sid):
+        return f"session:{sid}"
     return f"ip:{get_remote_address()}"
 
 
@@ -744,6 +754,14 @@ def _handle_rate_limit(e):
         "erro":    "Muitas requisições. Aguarde um momento antes de tentar novamente.",
         "retry_after": getattr(e, "retry_after", 60),
     }), 429
+
+@app.errorhandler(RequestEntityTooLarge)
+def _handle_payload_grande(e):
+    return jsonify({
+        "erro": "Requisicao muito grande.",
+        "detalhe": f"Envie no maximo {_MAX_JSON_BYTES} bytes por requisicao.",
+    }), 413
+
 
 _inicializar_cripto()   # deve rodar antes de init_db()
 init_db()
@@ -880,6 +898,10 @@ def chat():
     # Limite de tamanho da mensagem — rejeita payloads absurdamente grandes
     # antes de qualquer processamento (classificação, LLM, banco).
     # 2000 chars ≈ ~500 tokens, suficiente para qualquer relato real.
+    token_sessao = request.headers.get("X-Session-Token", "").strip()
+    if not token_delecao_valido(session_id, token_sessao):
+        return jsonify({"erro": "Token de sessao obrigatorio ou invalido."}), 403
+
     if len(mensagem) > 2_000:
         return jsonify({
             "erro": "Mensagem muito longa.",
@@ -990,8 +1012,8 @@ def chat():
 # ── ENDPOINTS ADMINISTRATIVOS (todos protegidos por @requer_admin) ────────────
 
 @app.route("/sessoes", methods=["GET"])
-@requer_admin
 @limiter.limit("5 per minute")
+@requer_admin
 def sessoes():
     conn = obter_conexao_db()
     c    = conn.cursor()
@@ -1031,15 +1053,15 @@ def sessoes():
 
 
 @app.route("/historico/<session_id>", methods=["GET"])
-@requer_admin
 @limiter.limit("5 per minute")
+@requer_admin
 def historico(session_id):
     if not session_id_valido(session_id):
         return jsonify({"erro": "session_id inválido."}), 400
     return jsonify({"session_id": session_id, "historico": carregar_historico(session_id)})
 
 
-def _salvar_identificacao():
+def _salvar_identificacao(exigir_token_sessao: bool = False):
     data       = request.get_json(silent=True) or {}
     session_id = (data.get("session_id") or "").strip()
     nome       = (data.get("nome") or "").strip()
@@ -1049,6 +1071,11 @@ def _salvar_identificacao():
     if not session_id_valido(session_id):
         return jsonify({"erro": "session_id inválido."}), 400
     # Limite de tamanho no nome para evitar entradas abusivas
+    if exigir_token_sessao:
+        token_sessao = request.headers.get("X-Session-Token", "").strip()
+        if not token_delecao_valido(session_id, token_sessao):
+            return jsonify({"erro": "Token de sessao obrigatorio ou invalido."}), 403
+
     if len(nome) > 200:
         return jsonify({"erro": "Nome muito longo (máximo 200 caracteres)."}), 400
 
@@ -1083,15 +1110,15 @@ def _apagar_sessao(session_id: str):
 
 
 @app.route("/identificar", methods=["POST"])
-@requer_admin
 @limiter.limit("5 per minute")
+@requer_admin
 def identificar_admin():
     return _salvar_identificacao()
 
 
 @app.route("/apagar/<session_id>", methods=["DELETE"])
-@requer_admin
 @limiter.limit("5 per minute")
+@requer_admin
 def apagar_admin(session_id):
     return _apagar_sessao(session_id)
 
@@ -1109,7 +1136,7 @@ def criar_sessao_publica():
 @app.route("/conversa/identificar", methods=["POST"])
 @limiter.limit("10 per minute", key_func=_chave_session_ou_ip)
 def identificar_publico():
-    return _salvar_identificacao()
+    return _salvar_identificacao(exigir_token_sessao=True)
 
 
 @app.route("/conversa/<session_id>", methods=["DELETE"])
@@ -1153,8 +1180,8 @@ def ready():
 
 
 @app.route("/health/admin", methods=["GET"])
-@requer_admin
 @limiter.limit("10 per minute")
+@requer_admin
 def health_admin():
     """Health check detalhado — apenas para administradores."""
     try:

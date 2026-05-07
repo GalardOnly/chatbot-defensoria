@@ -527,7 +527,11 @@
       await garantirSessao();
       const response = await fetch(`${API_BASE}/conversa/identificar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId,
+          'X-Session-Token': deleteToken
+        },
         body: JSON.stringify({ session_id: sessionId, nome })
       });
       if (!response.ok) {
@@ -587,7 +591,11 @@
 
       const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId,
+          'X-Session-Token': deleteToken
+        },
         body: JSON.stringify({ mensagem, session_id: sessionId })
       });
 
