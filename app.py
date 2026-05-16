@@ -767,7 +767,7 @@ _inicializar_cripto()   # deve rodar antes de init_db()
 init_db()
 
 chroma_client = chromadb.PersistentClient(path="chroma_db")
-colecao       = chroma_client.get_or_create_collection("documentos_juridicos")
+colecao       = chroma_client.get_or_create_collection("documentos_juridicos", embedding_function=None)
 
 embedding_service  = None
 classificador      = None
