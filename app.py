@@ -25,8 +25,8 @@ from conteudo_chat import (
     garantir_base_conhecimento,
     sanitizar_mensagem,
     redigir_pii,
+    detectar_risco_imediato_texto,
 )
-import chromadb
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -771,11 +771,9 @@ def _handle_payload_grande(e):
 _inicializar_cripto()   # deve rodar antes de init_db()
 init_db()
 
-chroma_client = chromadb.PersistentClient(path="chroma_db")
-colecao       = chroma_client.get_or_create_collection("documentos_juridicos", embedding_function=None)
-
 embedding_service  = None
 classificador      = None
+colecao            = None
 _init_lock         = threading.Lock()
 _servicos_prontos  = False
 _ultimo_erro_chat  = None
@@ -787,12 +785,28 @@ _ultimo_erro_chat  = None
 _boot_event = threading.Event()
 
 
+def _rag_indexacao_habilitada() -> bool:
+    return os.getenv("ENABLE_RAG_INDEXING", "").strip().lower() in {
+        "1", "true", "sim", "yes"
+    }
+
+
+def _criar_colecao_rag():
+    import chromadb
+
+    chroma_client = chromadb.PersistentClient(path="chroma_db")
+    return chroma_client.get_or_create_collection(
+        "documentos_juridicos",
+        embedding_function=None,
+    )
+
+
 def _carregar_servicos_background():
     """
     Carrega EmbeddingService + ClassificadorViolencia em thread separada.
     O servidor Flask sobe ANTES disso terminar — Render detecta a porta sem timeout.
     """
-    global embedding_service, classificador, _servicos_prontos
+    global embedding_service, classificador, colecao, _servicos_prontos
 
     with _init_lock:
         if _servicos_prontos:
@@ -802,10 +816,14 @@ def _carregar_servicos_background():
         try:
             embedding_service = EmbeddingService()
             print("[boot] EmbeddingService pronto.")
-            try:
-                garantir_base_conhecimento(embedding_service, colecao)
-            except Exception as e:
-                print(f"[boot] ERRO ao popular base de conhecimento: {e}")
+            if _rag_indexacao_habilitada():
+                try:
+                    colecao = _criar_colecao_rag()
+                    garantir_base_conhecimento(embedding_service, colecao)
+                except Exception as e:
+                    print(f"[boot] ERRO ao popular base de conhecimento: {e}")
+            else:
+                print("[boot] Indexacao RAG desativada no boot (ENABLE_RAG_INDEXING ausente).")
         except Exception as e:
             print(f"[boot] ERRO EmbeddingService: {e}")
 
@@ -959,6 +977,38 @@ def chat():
     )
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
     modo_local = detectar_modo_local(mensagem_limpa)
+    mensagem_normalizada = mensagem_limpa.lower().strip()
+    saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
+
+    if (
+        modo_local == "fachada"
+        and mensagem_normalizada in saudacoes_fachada
+        and not teve_real_recente
+        and not teve_real_no_historico
+    ):
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo="fachada",
+            classificacao=classificacao,
+        )
+        salvar_mensagem(session_id, "assistant", resposta)
+        return jsonify({
+            "resposta": resposta,
+            "modo": "fachada",
+        })
+
+    if detectar_risco_imediato_texto(mensagem_limpa):
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo="real",
+            classificacao=classificacao,
+        )
+        salvar_mensagem(session_id, "assistant", resposta)
+        return jsonify({
+            "resposta": resposta,
+            "modo": "real",
+        })
+
     try:
         modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao, session_id=session_id)
     except Exception as e:

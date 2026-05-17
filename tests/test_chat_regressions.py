@@ -35,7 +35,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             ):
                 response = app.app.test_client().post(
                     "/chat",
-                    json={"mensagem": "ola", "session_id": session_id},
+                    json={"mensagem": "como tirar mancha do sofa", "session_id": session_id},
                     headers={
                         "X-Session-Id": session_id,
                         "X-Session-Token": delete_token,
@@ -66,6 +66,97 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertEqual(app.detectar_modo_local("estou em perigo"), "real")
         self.assertEqual(app.detectar_modo_local("ele me bate"), "real")
         self.assertEqual(app.detectar_modo_local("ele disse que vai me matar amanha"), "real")
+
+    def test_chat_responds_to_greeting_without_llm(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            def fail_if_called(*args, **kwargs):
+                raise AssertionError("greeting should not wait for LLM")
+
+            with (
+                patch.object(app, "_servicos_prontos", False),
+                patch.object(app, "classificador", None),
+                patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
+                patch.object(app, "responder_pergunta", side_effect=fail_if_called) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "ola", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                modo_mock.assert_not_called()
+                responder_mock.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["modo"], "fachada")
+        self.assertIn("ajudar", response.get_json()["resposta"].lower())
+
+    def test_chat_responds_to_immediate_risk_without_llm(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            def fail_if_called(*args, **kwargs):
+                raise AssertionError("immediate risk should not wait for LLM")
+
+            with (
+                patch.object(app, "_servicos_prontos", False),
+                patch.object(app, "classificador", None),
+                patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
+                patch.object(app, "responder_pergunta", side_effect=fail_if_called) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "ele disse que vai me matar amanha", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                modo_mock.assert_not_called()
+                responder_mock.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["modo"], "real")
+        self.assertIn("190", data["resposta"])
+        self.assertIn("180", data["resposta"])
+
+    def test_rag_indexing_is_disabled_by_default(self):
+        import app
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(app._rag_indexacao_habilitada())
+
+        with patch.dict(os.environ, {"ENABLE_RAG_INDEXING": "true"}, clear=True):
+            self.assertTrue(app._rag_indexacao_habilitada())
+
+    def test_missing_rag_collection_does_not_block_or_embed(self):
+        import conteudo_chat
+
+        class FailIfEmbedded:
+            def embed(self, *args, **kwargs):
+                raise AssertionError("RAG disabled should not generate embeddings")
+
+        self.assertEqual(
+            conteudo_chat.buscar_chunks_relevantes(
+                "ola",
+                embedding_service=FailIfEmbedded(),
+                colecao=None,
+            ),
+            [],
+        )
 
 
 class GroqTimeoutRegressionsTest(unittest.TestCase):

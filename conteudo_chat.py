@@ -2,10 +2,10 @@ import os
 import re
 import time
 import hashlib
+import hmac
 import json
 import joblib
 import numpy as np
-import chromadb
 import requests
 from google import genai
 from google.genai import types
@@ -491,7 +491,7 @@ def _verificar_e_carregar(caminho: str, hash_esperado: str):
 
     hash_real = _sha256_arquivo(caminho)
 
-    if not hashlib.compare_digest(hash_real, hash_esperado):
+    if not hmac.compare_digest(hash_real, hash_esperado):
         # Nunca imprimimos o hash esperado em produção — evita vazar informação
         raise ModeloCompromissadoError(
             f"[SEGURANÇA] Hash SHA-256 inválido para '{caminho}'. "
@@ -932,7 +932,7 @@ def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
     """
     global _colecao_populada
 
-    if embedding_service is None:
+    if embedding_service is None or colecao is None:
         return []
 
     # Só consulta count() se ainda não confirmamos que a coleção tem dados
@@ -1256,6 +1256,8 @@ if __name__ == "__main__":
 
     chunks = chunk_text(texto, max_tokens=800)
     print(f"{len(chunks)} chunks gerados.")
+
+    import chromadb
 
     chroma_client = chromadb.PersistentClient(path="chroma_db")
     colecao = chroma_client.get_or_create_collection("documentos_juridicos")
