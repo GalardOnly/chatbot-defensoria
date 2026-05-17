@@ -583,6 +583,8 @@ def detectar_modo_local(mensagem):
         "bater", "bate", "bateu", "me bate", "espanc", "marido", "namorado", "companheiro", "agressor",
         "protetiva", "delegacia", "denuncia", "machuc", "feriu", "risco",
         "perigo", "em perigo",
+        "matar", "morte", "ameaça de morte", "ameaca de morte",
+        "vai me matar", "matar amanha", "matar amanhã",
         "humilha", "xing", "controla", "persegu", "tranca", "suficiente",
         "psicolog", "psicológ", "pressao psicologica", "pressão psicológica",
         "sofrendo pressao", "sofrendo pressão", "pressao em casa",

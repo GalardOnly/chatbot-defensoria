@@ -65,6 +65,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
 
         self.assertEqual(app.detectar_modo_local("estou em perigo"), "real")
         self.assertEqual(app.detectar_modo_local("ele me bate"), "real")
+        self.assertEqual(app.detectar_modo_local("ele disse que vai me matar amanha"), "real")
 
 
 class GroqTimeoutRegressionsTest(unittest.TestCase):
