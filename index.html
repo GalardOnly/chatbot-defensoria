@@ -421,9 +421,20 @@
   let deleteToken = sessionStorage.getItem('chat_delete_token') || '';
   let modoAtual = 'fachada';
   let consentimentoMostrado = false;
+  let envioEmAndamento = false;
+
+  async function fetchComTimeout(url, options = {}, timeoutMs = 25000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async function criarSessaoServidor() {
-    const response = await fetch(`${API_BASE}/conversa/sessao`, { method: 'POST' });
+    const response = await fetchComTimeout(`${API_BASE}/conversa/sessao`, { method: 'POST' });
     if (!response.ok) {
       throw new Error(await lerErroResposta(response, 'Nao foi possivel iniciar a sessao agora.'));
     }
@@ -437,6 +448,13 @@
     deleteToken = data.delete_token;
     sessionStorage.setItem('chat_session_id', sessionId);
     sessionStorage.setItem('chat_delete_token', deleteToken);
+  }
+
+  function limparSessaoLocal() {
+    sessionId = '';
+    deleteToken = '';
+    sessionStorage.removeItem('chat_session_id');
+    sessionStorage.removeItem('chat_delete_token');
   }
 
   async function garantirSessao() {
@@ -453,6 +471,36 @@
     } catch (e) {
       return erroPadrao;
     }
+  }
+
+  async function enviarChatServidor(mensagem) {
+    await garantirSessao();
+
+    let response = await fetchComTimeout(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Id': sessionId,
+        'X-Session-Token': deleteToken
+      },
+      body: JSON.stringify({ mensagem, session_id: sessionId })
+    });
+
+    if (response.status === 403) {
+      limparSessaoLocal();
+      await criarSessaoServidor();
+      response = await fetchComTimeout(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId,
+          'X-Session-Token': deleteToken
+        },
+        body: JSON.stringify({ mensagem, session_id: sessionId })
+      });
+    }
+
+    return response;
   }
 
   function atualizarAlturaViewport() {
@@ -579,27 +627,20 @@
   }
 
   async function enviar() {
+    if (envioEmAndamento) return;
     const input = document.getElementById('input-msg');
     const mensagem = input.value.trim();
     if (!mensagem) return;
 
+    envioEmAndamento = true;
+    input.value = '';
+    adicionarBolha(mensagem, 'usuario');
+    mostrarDigitando();
+
     try {
-      await garantirSessao();
-      input.value = '';
-      adicionarBolha(mensagem, 'usuario');
-      mostrarDigitando();
+      const response = await enviarChatServidor(mensagem);
 
-      const response = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-Id': sessionId,
-          'X-Session-Token': deleteToken
-        },
-        body: JSON.stringify({ mensagem, session_id: sessionId })
-      });
-
-      if (!response.ok) throw new Error('Falha na resposta do servidor');
+      if (!response.ok) throw new Error(await lerErroResposta(response, 'Falha na resposta do servidor'));
       const data = await response.json();
 
       removerDigitando();
@@ -616,7 +657,13 @@
       if (data.modo === 'real') modoAtual = 'real';
     } catch (e) {
       removerDigitando();
-      adicionarBolha('Erro ao conectar. Tente novamente.', 'assistente');
+      const mensagemErro = e.name === 'AbortError'
+        ? 'A conexao demorou demais. Tente novamente em alguns instantes.'
+        : (e.message || 'Erro ao conectar. Tente novamente.');
+      adicionarBolha(mensagemErro, 'assistente');
+    } finally {
+      envioEmAndamento = false;
+      input.focus();
     }
   }
 
