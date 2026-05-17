@@ -580,8 +580,9 @@ def detectar_modo_local(mensagem):
 
     termos_reais = [
         "socorro", "agred", "violenc", "ameac", "medo", "abuso",
-        "bater", "espanc", "marido", "namorado", "companheiro", "agressor",
+        "bater", "bate", "bateu", "me bate", "espanc", "marido", "namorado", "companheiro", "agressor",
         "protetiva", "delegacia", "denuncia", "machuc", "feriu", "risco",
+        "perigo", "em perigo",
         "humilha", "xing", "controla", "persegu", "tranca", "suficiente",
         "psicolog", "psicológ", "pressao psicologica", "pressão psicológica",
         "sofrendo pressao", "sofrendo pressão", "pressao em casa",
@@ -629,6 +630,8 @@ def detectar_modo(mensagem, historico=None, session_id: str = ""):
         modo_local = "fachada"
     if modo_local == "real":
         return "real"
+    if modo_local == "fachada":
+        return "fachada"
 
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
@@ -916,11 +919,9 @@ def chat():
     mensagem_id = salvar_mensagem(session_id, "user", mensagem)   # banco recebe original
     historico_sessao = carregar_historico(session_id)
 
-    # garantir_servicos() retorna False se o boot ainda não terminou após 60s.
-    # Nesse caso continuamos — classificador e embedding_service podem ser None,
-    # e o código downstream já trata ambos os casos graciosamente.
-    _boot_ok = garantir_servicos()
-    if not _boot_ok:
+    # O boot de embeddings/classificador roda em background. Não bloqueamos a
+    # conversa esperando RAG ficar pronto; o código abaixo já trata serviços None.
+    if not _servicos_prontos:
         print(
             f"[chat] Boot ainda em andamento para session={session_id}. "
             "Prosseguindo sem classificador/embeddings."

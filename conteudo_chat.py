@@ -871,11 +871,11 @@ def criar_chat_groq(messages, model="llama-3.3-70b-versatile", temperature=0.6, 
 
     Correção C7: raise_for_status() lançava HTTPError genérico para 429
     sem qualquer retry. Agora:
-      - Até 3 tentativas com backoff exponencial.
+      - Até 2 tentativas com backoff exponencial curto.
       - Respeita o header Retry-After quando presente.
       - Outros erros HTTP (4xx/5xx que não sejam 429) falham imediatamente.
     """
-    _MAX_TENTATIVAS = 3
+    _MAX_TENTATIVAS = 2
     _BACKOFF_BASE   = 5      # segundos base — dobra a cada tentativa
 
     groq_api_key = os.getenv("GROQ_API_KEY")
@@ -897,7 +897,7 @@ def criar_chat_groq(messages, model="llama-3.3-70b-versatile", temperature=0.6, 
                     "temperature": temperature,
                     "max_tokens":  max_tokens,
                 },
-                timeout=60,
+                timeout=15,
             )
 
             if response.status_code == 429:
