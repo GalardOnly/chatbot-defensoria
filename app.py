@@ -15,6 +15,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
+import json
 from conteudo_chat import (
     responder_pergunta,
     resposta_contingencia,
@@ -25,8 +26,8 @@ from conteudo_chat import (
     garantir_base_conhecimento,
     sanitizar_mensagem,
     redigir_pii,
-    detectar_risco_imediato_texto,
 )
+from triagem_fonar import avaliar_triagem_fonar, triagem_indica_modo_real
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -395,7 +396,11 @@ def init_db():
             feat_menciona_menor  INTEGER DEFAULT 0,
             feat_menciona_saida  INTEGER DEFAULT 0,
             feat_risco_imediato  INTEGER DEFAULT 0,
-            feat_primeiro_relato INTEGER DEFAULT 0
+            feat_primeiro_relato INTEGER DEFAULT 0,
+            nivel_risco          TEXT,
+            risco_imediato       INTEGER DEFAULT 0,
+            tipos_violencia_fonar TEXT,
+            sinais_fonar         TEXT
         )
     """)
     # Tabela de identificação criada aqui — não mais no endpoint /identificar
@@ -423,6 +428,10 @@ def init_db():
         ("feat_menciona_saida",  "INTEGER DEFAULT 0"),
         ("feat_risco_imediato",  "INTEGER DEFAULT 0"),
         ("feat_primeiro_relato", "INTEGER DEFAULT 0"),
+        ("nivel_risco",          "TEXT"),
+        ("risco_imediato",       "INTEGER DEFAULT 0"),
+        ("tipos_violencia_fonar", "TEXT"),
+        ("sinais_fonar",         "TEXT"),
     ]
     colunas_permitidas = {
         "tipo_violencia",
@@ -432,6 +441,10 @@ def init_db():
         "feat_menciona_saida",
         "feat_risco_imediato",
         "feat_primeiro_relato",
+        "nivel_risco",
+        "risco_imediato",
+        "tipos_violencia_fonar",
+        "sinais_fonar",
     }
     tipos_permitidos = {"TEXT", "INTEGER DEFAULT 0"}
     for coluna, tipo in colunas_novas:
@@ -516,13 +529,26 @@ def extrair_features(mensagem: str, session_id: str) -> dict:
     }
 
 
-def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=None):
+def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=None, triagem=None):
     # 1. Extrair features ANTES de cifrar (so para mensagens do usuario)
     feats = extrair_features(mensagem, session_id) if role == "user" else {
         "feat_menciona_arma":   0, "feat_menciona_menor":  0,
         "feat_menciona_saida":  0, "feat_risco_imediato":  0,
         "feat_primeiro_relato": 0,
     }
+    triagem = triagem if role == "user" else None
+    nivel_risco = triagem.get("nivel") if triagem else None
+    risco_imediato = int(bool(triagem.get("risco_imediato"))) if triagem else 0
+    if triagem:
+        feats["feat_risco_imediato"] = risco_imediato
+    tipos_fonar = (
+        json.dumps(triagem.get("tipos_violencia", []), ensure_ascii=False)
+        if triagem else None
+    )
+    sinais_fonar = (
+        json.dumps(triagem.get("sinais_fonar", []), ensure_ascii=False)
+        if triagem else None
+    )
 
     # 2. Cifrar mensagem
     conn           = obter_conexao_db()
@@ -534,14 +560,16 @@ def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=N
     c.execute(
         """INSERT INTO historico
            (session_id, role, mensagem, timestamp, tipo_violencia, gravidade,
-            feat_menciona_arma, feat_menciona_menor, feat_menciona_saida,
-            feat_risco_imediato, feat_primeiro_relato)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             feat_menciona_arma, feat_menciona_menor, feat_menciona_saida,
+             feat_risco_imediato, feat_primeiro_relato,
+             nivel_risco, risco_imediato, tipos_violencia_fonar, sinais_fonar)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id, role, mensagem_salva, timestamp, tipo_violencia, gravidade,
             feats["feat_menciona_arma"],   feats["feat_menciona_menor"],
             feats["feat_menciona_saida"],  feats["feat_risco_imediato"],
             feats["feat_primeiro_relato"],
+            nivel_risco, risco_imediato, tipos_fonar, sinais_fonar,
         ),
     )
     mensagem_id = c.lastrowid
@@ -554,7 +582,8 @@ def carregar_historico(session_id):
     conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute(
-        """SELECT role, mensagem, timestamp, tipo_violencia, gravidade
+        """SELECT role, mensagem, timestamp, tipo_violencia, gravidade,
+                  nivel_risco, risco_imediato, tipos_violencia_fonar, sinais_fonar
            FROM historico WHERE session_id = ? ORDER BY id ASC""",
         (session_id,),
     )
@@ -567,6 +596,10 @@ def carregar_historico(session_id):
             "timestamp":      row[2],
             "tipo_violencia": row[3],
             "gravidade":      row[4],
+            "nivel_risco":    row[5],
+            "risco_imediato": bool(row[6]) if row[6] is not None else False,
+            "tipos_violencia_fonar": json.loads(row[7]) if row[7] else [],
+            "sinais_fonar":   json.loads(row[8]) if row[8] else [],
         }
         for row in rows
     ]
@@ -936,7 +969,14 @@ def chat():
     # mas usamos a versão limpa em todas as operações subsequentes.
     mensagem_limpa, alertas = sanitizar_mensagem(mensagem, session_id)
 
-    mensagem_id = salvar_mensagem(session_id, "user", mensagem)   # banco recebe original
+    historico_anterior = carregar_historico(session_id)
+    triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+    mensagem_id = salvar_mensagem(
+        session_id,
+        "user",
+        mensagem,
+        triagem=triagem,
+    )   # banco recebe original cifrado e metadados FONAR anonimizados
     historico_sessao = carregar_historico(session_id)
 
     # O boot de embeddings/classificador roda em background. Não bloqueamos a
@@ -976,7 +1016,12 @@ def chat():
         for m in historico_sessao[-8:] if m["role"] == "user"
     )
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
-    modo_local = detectar_modo_local(mensagem_limpa)
+    if triagem.get("nivel") == "fachada":
+        modo_local = "fachada"
+    elif triagem_indica_modo_real(triagem):
+        modo_local = "real"
+    else:
+        modo_local = detectar_modo_local(mensagem_limpa)
     mensagem_normalizada = mensagem_limpa.lower().strip()
     saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
 
@@ -990,6 +1035,7 @@ def chat():
             pergunta=mensagem,
             modo="fachada",
             classificacao=classificacao,
+            triagem=triagem,
         )
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
@@ -997,11 +1043,12 @@ def chat():
             "modo": "fachada",
         })
 
-    if detectar_risco_imediato_texto(mensagem_limpa):
+    if triagem.get("risco_imediato"):
         resposta = resposta_contingencia(
             pergunta=mensagem,
             modo="real",
             classificacao=classificacao,
+            triagem=triagem,
         )
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
@@ -1009,11 +1056,14 @@ def chat():
             "modo": "real",
         })
 
-    try:
-        modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao, session_id=session_id)
-    except Exception as e:
-        print(f"[chat] Aviso ao detectar modo: {e}")
-        modo_llm = "real" if (teve_real_recente or classificacao_indica_real) else "fachada"
+    if modo_local in {"real", "fachada"}:
+        modo_llm = modo_local
+    else:
+        try:
+            modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao, session_id=session_id)
+        except Exception as e:
+            print(f"[chat] Aviso ao detectar modo: {e}")
+            modo_llm = "real" if (teve_real_recente or classificacao_indica_real) else "fachada"
 
     if classificacao_indica_real or modo_local == "real":
         modo_final = "real"
@@ -1040,6 +1090,7 @@ def chat():
             historico=historico_api,
             modo=modo_final,
             classificacao=classificacao,
+            triagem=triagem,
             session_id=session_id,            # para log de auditoria
         )
         _ultimo_erro_chat = None
@@ -1050,6 +1101,7 @@ def chat():
             pergunta=mensagem,
             modo=modo_final,
             classificacao=classificacao,
+            triagem=triagem,
         )
 
     salvar_mensagem(session_id, "assistant", resposta)

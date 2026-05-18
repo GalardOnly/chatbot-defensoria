@@ -133,6 +133,51 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("190", data["resposta"])
         self.assertIn("180", data["resposta"])
 
+    def test_declared_abuse_without_immediate_risk_uses_llm_with_triage(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            captured = {}
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                return "acolhimento gerado pela LLM"
+
+            def fail_if_called(*args, **kwargs):
+                raise AssertionError("FONAR should decide mode without Groq mode detection")
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={
+                        "mensagem": "meu marido me expoe nas redes sociais sem meu consentimento",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                modo_mock.assert_not_called()
+                responder_mock.assert_called_once()
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["modo"], "real")
+        self.assertEqual(data["resposta"], "acolhimento gerado pela LLM")
+        self.assertEqual(captured["triagem"]["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(captured["triagem"]["risco_imediato"])
+        self.assertIn("digital", captured["triagem"]["tipos_violencia"])
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 
