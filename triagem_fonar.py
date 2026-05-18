@@ -80,6 +80,19 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "medida protetiva", "defensoria", "separacao", "divorcio",
         "guarda dos filhos", "pensao", "processo",
     ]
+    relacao_intima = [
+        "marido", "companheiro", "namorado", "ex marido", "ex-marido",
+        "meu ex", "meu esposo", "esposo", "ele sempre", "ele me",
+    ]
+    controle_domestico_ambiguo = [
+        "escuro", "janela", "nao abre", "nunca abre", "ficar em casa",
+        "me deixa no escuro", "no escuro", "me prende", "trancada em casa",
+    ]
+    restricao_liberdade = [
+        "ficar trancada", "devo ficar trancada", "mandou ficar trancada",
+        "manda eu ficar em casa", "nao deixa eu sair", "proibe sair",
+        "proibiu sair", "me impede de sair", "me prende em casa",
+    ]
 
     digitais = [
         "expoe", "expor", "exposicao", "redes sociais", "postar", "postou",
@@ -144,6 +157,10 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     if _tem(t, psicologicas):
         tipos.append("psicologica")
         sinais.append("violencia_psicologica")
+    if _tem(t, restricao_liberdade):
+        tipos.append("psicologica")
+        sinais.append("restricao_liberdade")
+        sinais.append("violencia_psicologica")
     if _tem(t, sexuais):
         tipos.append("sexual")
         sinais.append("violencia_sexual")
@@ -163,6 +180,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("falsa_segura")
     if _tem(t, pedidos_orientacao):
         sinais.append("pedido_orientacao")
+    if _tem(t, relacao_intima) and _tem(t, controle_domestico_ambiguo):
+        sinais.append("possivel_controle_domestico")
 
     if "arma" in sinais and (
         "agressor_presente" in sinais or "ameaca_morte" in sinais or _tem(t, perigo_declarado)
@@ -213,6 +232,14 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             risco_imediato=False,
             sinais_fonar=sinais,
             acao_resposta="orientar_com_passos",
+        )
+
+    if "possivel_controle_domestico" in sinais:
+        return _resultado(
+            nivel=NIVEL_AMBIGUA,
+            risco_imediato=False,
+            sinais_fonar=sinais,
+            acao_resposta="acolher_e_investigar",
         )
 
     if _tem(t, pedidos_ajuda):

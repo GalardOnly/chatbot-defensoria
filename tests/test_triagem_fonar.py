@@ -56,6 +56,26 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertFalse(triagem["risco_imediato"])
         self.assertEqual(triagem["tipos_violencia"], [])
 
+    def test_contexto_de_marido_e_ambiente_nao_vira_fachada_por_conter_casa(self):
+        triagem = avaliar_triagem_fonar(
+            "meu marido nunca abre a janela de casa, sempre ficou no escuro"
+        )
+
+        self.assertEqual(triagem["nivel"], "ambigua")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("possivel_controle_domestico", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_investigar")
+
+    def test_controle_para_ficar_trancada_em_casa_nao_vira_fachada(self):
+        triagem = avaliar_triagem_fonar(
+            "ele sempre me diz que eu devo ficar trancada em casa"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+
 
 if __name__ == "__main__":
     unittest.main()
