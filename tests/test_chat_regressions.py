@@ -145,7 +145,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("190", data["resposta"])
         self.assertIn("180", data["resposta"])
 
-    def test_declared_abuse_without_immediate_risk_uses_llm_with_triage(self):
+    def test_declared_abuse_without_immediate_risk_uses_llm_response_with_local_triage(self):
         import app
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,26 +154,18 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             session_id, delete_token = app.registrar_sessao()
 
             captured = {}
-            triagem_llm = {
-                "nivel": "violencia_sem_risco_imediato",
-                "risco_imediato": False,
-                "tipos_violencia": ["digital"],
-                "sinais_fonar": ["exposicao_sem_consentimento"],
-                "acao_resposta": "acolher_e_perguntar_seguranca",
-                "origem": "llm",
-            }
 
             def responder_fake(*args, **kwargs):
                 captured["triagem"] = kwargs.get("triagem")
                 return "acolhimento gerado pela LLM"
 
             def fail_if_called(*args, **kwargs):
-                raise AssertionError("Legacy mode detector should not classify this case")
+                raise AssertionError("detector legado ou triagem LLM nao deve decidir este caso local")
 
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
-                patch.object(app, "classificar_triagem_llm", return_value=triagem_llm) as triagem_mock,
+                patch.object(app, "classificar_triagem_llm", side_effect=fail_if_called) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
                 patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
@@ -188,7 +180,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                         "X-Session-Token": delete_token,
                     },
                 )
-                triagem_mock.assert_called_once()
+                triagem_mock.assert_not_called()
                 modo_mock.assert_not_called()
                 responder_mock.assert_called_once()
 
@@ -200,7 +192,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertFalse(captured["triagem"]["risco_imediato"])
         self.assertIn("digital", captured["triagem"]["tipos_violencia"])
 
-    def test_llm_triage_can_route_control_context_to_real_without_local_casework(self):
+    def test_local_triage_routes_control_context_to_real_without_legacy_detector(self):
         import app
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -208,19 +200,10 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
 
-            triagem_llm = {
-                "nivel": "violencia_sem_risco_imediato",
-                "risco_imediato": False,
-                "tipos_violencia": ["psicologica"],
-                "sinais_fonar": ["restricao_liberdade"],
-                "acao_resposta": "acolher_e_perguntar_seguranca",
-                "origem": "llm",
-            }
-
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
-                patch.object(app, "classificar_triagem_llm", return_value=triagem_llm) as triagem_mock,
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("triagem local deve cobrir este caso")) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=AssertionError("old detector should not decide")),
                 patch.object(app, "responder_pergunta", return_value="acolhimento"),
             ):
@@ -238,7 +221,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["modo"], "real")
-        triagem_mock.assert_called_once()
+        triagem_mock.assert_not_called()
 
     def test_llm_failure_fallback_receives_history_for_context(self):
         import app
@@ -309,6 +292,58 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
         self.assertIn("trancada em casa", historico_texto)
 
+    def test_contextual_rights_request_skips_triage_llm_but_uses_llm_response(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "meu marido me expoe nas redes sociais sem meu consentimento",
+            )
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "ele sempre me diz que eu devo ficar trancada em casa",
+            )
+            captured = {}
+
+            def fail_if_called(*args, **kwargs):
+                raise AssertionError("pedido de orientacao contextual nao deve esperar LLM de triagem")
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                return "resposta acolhedora da LLM com direitos"
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=fail_if_called) as triagem_mock,
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={
+                        "mensagem": "estou segura agora, e gostaria de saber dos meus direitos o que eu posso fazer contra ele",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["modo"], "real")
+        self.assertEqual(data["resposta"], "resposta acolhedora da LLM com direitos")
+        self.assertEqual(captured["triagem"]["nivel"], "pedido_orientacao")
+        triagem_mock.assert_not_called()
+        responder_mock.assert_called_once()
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 
@@ -336,7 +371,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
 
 
 class GroqTimeoutRegressionsTest(unittest.TestCase):
-    def test_groq_uses_short_timeout_and_two_attempts(self):
+    def test_groq_uses_short_timeout_and_single_attempt(self):
         import conteudo_chat
 
         calls = []
@@ -353,7 +388,7 @@ class GroqTimeoutRegressionsTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 conteudo_chat.criar_chat_groq([{"role": "user", "content": "oi"}])
 
-        self.assertEqual(calls, [15, 15])
+        self.assertEqual(calls, [15])
 
 
 if __name__ == "__main__":

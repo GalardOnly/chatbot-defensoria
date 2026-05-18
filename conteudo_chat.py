@@ -111,16 +111,13 @@ def formatar_contatos(municipio: str = "Horizonte") -> str:
         "Emergencia:",
         f"- Policia Militar: {CANAIS_EMERGENCIA['policia_militar']['telefone']} ({CANAIS_EMERGENCIA['policia_militar']['obs']})",
         f"- Central de Atendimento a Mulher: {CANAIS_EMERGENCIA['central_180']['telefone']} ({CANAIS_EMERGENCIA['central_180']['obs']})",
-        "",
         "Rede local de acolhimento e orientacao:",
         f"- {dados['defensoria']['nome']}: {dados['defensoria']['endereco']}; telefone {dados['defensoria']['telefone']}.",
         f"- {dados['casa_mulher']['nome']}: {dados['casa_mulher']['endereco']}; {dados['casa_mulher']['horario']}; telefone {dados['casa_mulher']['telefone']}.",
         f"- {dados['delegacia']['nome']}: telefone {dados['delegacia']['telefone']}; {dados['delegacia']['obs']}.",
-        "",
         "Servicos digitais oficiais:",
         f"- Formulario de medida protetiva: {CANAIS_EMERGENCIA['medida_protetiva_online']['url']} ({CANAIS_EMERGENCIA['medida_protetiva_online']['obs']}).",
         f"- BO eletronico: {CANAIS_EMERGENCIA['bo_online']['url']} ({CANAIS_EMERGENCIA['bo_online']['obs']}).",
-        "",
         "Regra de seguranca: se algum telefone, endereco ou link nao estiver neste contexto oficial, nao invente. Diga que o dado nao esta confirmado.",
     ]
     return "\n".join(linhas)
@@ -832,11 +829,11 @@ def criar_chat_groq(messages, model="llama-3.3-70b-versatile", temperature=0.6, 
 
     Correção C7: raise_for_status() lançava HTTPError genérico para 429
     sem qualquer retry. Agora:
-      - Até 2 tentativas com backoff exponencial curto.
-      - Respeita o header Retry-After quando presente.
+      - Uma tentativa curta. Se falhar, o app cai no fallback acolhedor.
+      - Em 429, retorna erro controlado para o fallback responder sem travar a tela.
       - Outros erros HTTP (4xx/5xx que não sejam 429) falham imediatamente.
     """
-    _MAX_TENTATIVAS = 2
+    _MAX_TENTATIVAS = 1
     _BACKOFF_BASE   = 5      # segundos base — dobra a cada tentativa
 
     groq_api_key = os.getenv("GROQ_API_KEY")

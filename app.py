@@ -303,6 +303,10 @@ def session_id_valido(session_id: str) -> bool:
     return bool(session_id and _SESSION_ID_RE.match(session_id))
 
 
+def normalizar_resposta_publica(texto: str) -> str:
+    return re.sub(r"\n{2,}", "\n", texto or "").strip()
+
+
 def gerar_session_id() -> str:
     return f"sess_{secrets.token_hex(32)}"
 
@@ -973,12 +977,22 @@ def chat():
     historico_anterior = carregar_historico(session_id)
     mensagem_normalizada = mensagem_limpa.lower().strip()
     saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
+    triagem_local = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
     if mensagem_normalizada in saudacoes_fachada:
-        triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+        triagem = triagem_local
         triagem["origem"] = "local_saudacao"
     elif avaliar_emergencia_obvia(mensagem_limpa):
-        triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+        triagem = triagem_local
         triagem["origem"] = "local_emergencia_obvia"
+    elif (
+        triagem_indica_modo_real(triagem_local)
+        and (
+            triagem_local.get("nivel") != "ambigua"
+            or bool(triagem_local.get("sinais_fonar"))
+        )
+    ):
+        triagem = triagem_local
+        triagem["origem"] = "local_sinal_sensivel"
     else:
         triagem = classificar_triagem_llm(
             mensagem_limpa,
@@ -1050,6 +1064,7 @@ def chat():
             triagem=triagem,
             historico=historico_sessao,
         )
+        resposta = normalizar_resposta_publica(resposta)
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
             "resposta": resposta,
@@ -1064,6 +1079,7 @@ def chat():
             triagem=triagem,
             historico=historico_sessao,
         )
+        resposta = normalizar_resposta_publica(resposta)
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
             "resposta": resposta,
@@ -1097,6 +1113,7 @@ def chat():
             historico=historico_api,
         )
 
+    resposta = normalizar_resposta_publica(resposta)
     salvar_mensagem(session_id, "assistant", resposta)
 
     # Retornamos apenas o necessário para o frontend — dados internos de

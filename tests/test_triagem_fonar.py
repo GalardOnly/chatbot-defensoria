@@ -102,6 +102,27 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("pedido_orientacao_com_contexto", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "orientar_com_passos")
 
+    def test_estou_segura_e_quero_direitos_usa_contexto_recente_de_abuso(self):
+        historico = [
+            {
+                "role": "user",
+                "content": "meu marido me expoe nas redes sociais sem meu consentimento",
+            },
+            {
+                "role": "user",
+                "content": "ele sempre me diz que eu devo ficar trancada em casa",
+            },
+        ]
+
+        triagem = avaliar_triagem_fonar(
+            "estou segura agora, e gostaria de saber dos meus direitos o que eu posso fazer contra ele",
+            historico=historico,
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("pedido_orientacao_com_contexto", triagem["sinais_fonar"])
+
     def test_pedido_de_direitos_sem_contexto_sensivel_continua_ambiguo(self):
         triagem = avaliar_triagem_fonar("quais sao os meus direitos?")
 
