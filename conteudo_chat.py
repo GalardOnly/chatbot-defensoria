@@ -1177,6 +1177,12 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
                     "\n\nSe for seguro, tente guardar provas: prints, links, datas, nomes de perfis "
                     "e mensagens. Não precisa confrontar ele para fazer isso."
                 )
+            elif "restricao_liberdade" in set(triagem.get("sinais_fonar") or []):
+                complemento = (
+                    "\n\nImpedir você de sair, ver outras pessoas, usar o celular ou circular livremente "
+                    "é uma forma séria de controle. Se estiver segura agora, posso te explicar os caminhos: "
+                    "Defensoria, BO eletrônico e medida protetiva."
+                )
             return (
                 "Sinto muito que você esteja passando por isso. O que você descreveu é sério, "
                 "e não é culpa sua.\n\n"

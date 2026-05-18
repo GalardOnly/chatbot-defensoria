@@ -89,7 +89,7 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "direitos", "meus direitos", "quais sao meus direitos",
         "quais sao os meus direitos", "posso conversar", "posso falar",
         "o que eu faco", "o que posso fazer", "como proceder",
-        "me orienta", "orientacao",
+        "me orienta", "orientacao", "informacoes", "preciso de informacoes",
     ]
     relacao_intima = [
         "marido", "companheiro", "namorado", "ex marido", "ex-marido",
@@ -103,12 +103,16 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "ficar trancada", "devo ficar trancada", "mandou ficar trancada",
         "manda eu ficar em casa", "nao deixa eu sair", "proibe sair",
         "proibiu sair", "me impede de sair", "me prende em casa",
+        "me deixando trancada", "me deixa trancada", "deixando trancada",
+        "trancada em casa", "sem ver a luz do sol", "nao me deixa pegar o celular",
+        "nao deixa pegar o celular",
     ]
 
     digitais = [
         "expoe", "expor", "exposicao", "redes sociais", "postar", "postou",
         "publicou", "foto intima", "fotos intimas", "nude", "nudes",
-        "sem meu consentimento", "sem consentimento", "celular", "senha",
+        "sem meu consentimento", "sem consentimento", "invadiu meu celular",
+        "mexeu no meu celular", "pegou minha senha", "senha",
         "whatsapp", "instagram", "facebook", "stalking", "persegue online",
     ]
     fisicas = [
@@ -245,6 +249,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             acao_resposta="acolher_com_discricao",
         )
 
+    if "pedido_orientacao" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_com_passos",
+        )
+
     if tipos:
         return _resultado(
             nivel=NIVEL_VIOLENCIA,
@@ -252,14 +265,6 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             tipos_violencia=tipos,
             sinais_fonar=sinais,
             acao_resposta="acolher_e_perguntar_seguranca",
-        )
-
-    if "pedido_orientacao" in sinais:
-        return _resultado(
-            nivel=NIVEL_ORIENTACAO,
-            risco_imediato=False,
-            sinais_fonar=sinais,
-            acao_resposta="orientar_com_passos",
         )
 
     if "possivel_controle_domestico" in sinais:

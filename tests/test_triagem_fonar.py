@@ -76,6 +76,34 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("psicologica", triagem["tipos_violencia"])
         self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
 
+    def test_marido_deixando_trancada_sem_luz_vira_restricao_liberdade(self):
+        triagem = avaliar_triagem_fonar(
+            "boa noite, meu marido esta me deixando trancada em casa, sem ver a luz do sol"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+
+    def test_estou_segura_e_preciso_informacoes_com_celular_vira_orientacao_nao_digital(self):
+        historico = [
+            {
+                "role": "user",
+                "content": "meu marido esta me deixando trancada em casa",
+            },
+        ]
+
+        triagem = avaliar_triagem_fonar(
+            "estou segura, mas preciso de informacoes, ele nao me deixa pegar o celular sempre",
+            historico=historico,
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("pedido_orientacao_com_contexto", triagem["sinais_fonar"])
+        self.assertNotIn("digital", triagem["tipos_violencia"])
+
     def test_pedido_de_direitos_usa_contexto_recente_de_abuso(self):
         historico = [
             {
