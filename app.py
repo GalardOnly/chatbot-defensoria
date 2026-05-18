@@ -1048,6 +1048,7 @@ def chat():
             modo="fachada",
             classificacao=classificacao,
             triagem=triagem,
+            historico=historico_sessao,
         )
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
@@ -1061,6 +1062,7 @@ def chat():
             modo="real",
             classificacao=classificacao,
             triagem=triagem,
+            historico=historico_sessao,
         )
         salvar_mensagem(session_id, "assistant", resposta)
         return jsonify({
@@ -1092,6 +1094,7 @@ def chat():
             modo=modo_final,
             classificacao=classificacao,
             triagem=triagem,
+            historico=historico_api,
         )
 
     salvar_mensagem(session_id, "assistant", resposta)

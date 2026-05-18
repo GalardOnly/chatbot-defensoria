@@ -46,6 +46,42 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("medida protetiva", resposta.lower())
         self.assertIn("https://mulher.policiacivil.ce.gov.br", resposta)
 
+    def test_fallback_uses_history_for_rights_request_after_abuse_context(self):
+        import conteudo_chat
+
+        historico = [
+            {
+                "role": "user",
+                "content": "meu marido nunca abre a janela de casa, sempre fico no escuro",
+            },
+            {
+                "role": "assistant",
+                "content": "Estou aqui com voce. Voce esta segura agora para conversar?",
+            },
+            {
+                "role": "user",
+                "content": "ele sempre me diz que eu devo ficar trancada em casa",
+            },
+        ]
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "eu posso conversar, quais sao os meus direitos?",
+            modo="real",
+            triagem={
+                "nivel": "ambigua",
+                "risco_imediato": False,
+                "tipos_violencia": [],
+                "sinais_fonar": [],
+                "acao_resposta": "acolher_e_investigar",
+            },
+            historico=historico,
+        )
+
+        self.assertIn("Defensoria", resposta)
+        self.assertIn("medida protetiva", resposta.lower())
+        self.assertIn("https://mulher.policiacivil.ce.gov.br", resposta)
+        self.assertNotIn("Voce esta segura agora para conversar?", resposta)
+
     def test_llm_context_injects_official_links(self):
         import conteudo_chat
 

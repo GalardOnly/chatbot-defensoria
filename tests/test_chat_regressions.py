@@ -240,6 +240,75 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertEqual(response.get_json()["modo"], "real")
         triagem_mock.assert_called_once()
 
+    def test_llm_failure_fallback_receives_history_for_context(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            triagens = [
+                {
+                    "nivel": "violencia_sem_risco_imediato",
+                    "risco_imediato": False,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": ["restricao_liberdade"],
+                    "acao_resposta": "acolher_e_perguntar_seguranca",
+                    "origem": "llm",
+                },
+                {
+                    "nivel": "ambigua",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": [],
+                    "acao_resposta": "acolher_e_investigar",
+                    "origem": "llm",
+                },
+            ]
+            captured = {}
+
+            def fallback_fake(*args, **kwargs):
+                captured["historico"] = kwargs.get("historico")
+                return "fallback contextual"
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=triagens),
+                patch.object(app, "detectar_modo", side_effect=AssertionError("old detector should not decide")),
+                patch.object(app, "responder_pergunta", side_effect=["acolhimento", RuntimeError("LLM off")]),
+                patch.object(app, "resposta_contingencia", side_effect=fallback_fake),
+            ):
+                client = app.app.test_client()
+                client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "ele sempre me diz que eu devo ficar trancada em casa",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                response = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "eu posso conversar, quais sao os meus direitos?",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["resposta"], "fallback contextual")
+        historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
+        self.assertIn("trancada em casa", historico_texto)
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 

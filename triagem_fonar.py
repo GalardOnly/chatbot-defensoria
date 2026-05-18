@@ -48,6 +48,11 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     """
     t = _normalizar(texto)
     historico = historico or []
+    historico_usuaria = " ".join(
+        _normalizar(msg.get("content") or msg.get("mensagem") or "")
+        for msg in historico[-8:]
+        if msg.get("role") == "user"
+    )
 
     if not t:
         return _resultado(
@@ -79,6 +84,12 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "denunciar", "denuncia", "boletim de ocorrencia", "b.o", "bo ",
         "medida protetiva", "defensoria", "separacao", "divorcio",
         "guarda dos filhos", "pensao", "processo",
+    ]
+    pedidos_orientacao_contextual = [
+        "direitos", "meus direitos", "quais sao meus direitos",
+        "quais sao os meus direitos", "posso conversar", "posso falar",
+        "o que eu faco", "o que posso fazer", "como proceder",
+        "me orienta", "orientacao",
     ]
     relacao_intima = [
         "marido", "companheiro", "namorado", "ex marido", "ex-marido",
@@ -182,6 +193,23 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("pedido_orientacao")
     if _tem(t, relacao_intima) and _tem(t, controle_domestico_ambiguo):
         sinais.append("possivel_controle_domestico")
+
+    historico_tem_abuso_ou_controle = bool(historico_usuaria) and (
+        _tem(historico_usuaria, digitais)
+        or _tem(historico_usuaria, fisicas)
+        or _tem(historico_usuaria, psicologicas)
+        or _tem(historico_usuaria, sexuais)
+        or _tem(historico_usuaria, patrimoniais)
+        or _tem(historico_usuaria, ameaca_morte)
+        or _tem(historico_usuaria, restricao_liberdade)
+        or (
+            _tem(historico_usuaria, relacao_intima)
+            and _tem(historico_usuaria, controle_domestico_ambiguo)
+        )
+    )
+    if _tem(t, pedidos_orientacao_contextual) and historico_tem_abuso_ou_controle:
+        sinais.append("pedido_orientacao")
+        sinais.append("pedido_orientacao_com_contexto")
 
     if "arma" in sinais and (
         "agressor_presente" in sinais or "ameaca_morte" in sinais or _tem(t, perigo_declarado)
