@@ -1,6 +1,6 @@
 import unittest
 
-from triagem_fonar import avaliar_triagem_fonar
+from triagem_fonar import avaliar_triagem_fonar, avaliar_emergencia_obvia
 
 
 class TriagemFonarTest(unittest.TestCase):
@@ -75,6 +75,15 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertFalse(triagem["risco_imediato"])
         self.assertIn("psicologica", triagem["tipos_violencia"])
         self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+
+    def test_emergencia_obvia_local_e_minima(self):
+        self.assertTrue(avaliar_emergencia_obvia("ele esta aqui com uma faca"))
+        self.assertTrue(avaliar_emergencia_obvia("nao posso falar, ele pode ouvir"))
+        self.assertTrue(avaliar_emergencia_obvia("ele disse que vai me matar amanha"))
+
+        self.assertFalse(avaliar_emergencia_obvia("ele sempre me diz que devo ficar trancada em casa"))
+        self.assertFalse(avaliar_emergencia_obvia("meu marido nunca abre a janela de casa"))
+        self.assertFalse(avaliar_emergencia_obvia("meu marido me expoe nas redes sociais"))
 
 
 if __name__ == "__main__":

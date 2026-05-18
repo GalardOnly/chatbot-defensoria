@@ -897,6 +897,147 @@ def criar_chat_groq(messages, model="llama-3.3-70b-versatile", temperature=0.6, 
                 raise RuntimeError(f"Groq falhou após {_MAX_TENTATIVAS} tentativas: {ultimo_erro}") from ultimo_erro
 
 
+_NIVEIS_TRIAGEM = {
+    "fachada",
+    "ambigua",
+    "pedido_orientacao",
+    "violencia_sem_risco_imediato",
+    "risco_moderado",
+    "risco_grave",
+    "risco_extremo",
+}
+_ACOES_TRIAGEM = {
+    "fachada",
+    "acolher_e_investigar",
+    "orientar_com_passos",
+    "acolher_e_perguntar_seguranca",
+    "acolher_com_discricao",
+    "emergencia_imediata",
+}
+
+
+def _extrair_json_objeto(texto: str) -> dict:
+    inicio = texto.find("{")
+    fim = texto.rfind("}")
+    if inicio == -1 or fim == -1 or fim <= inicio:
+        raise ValueError("Resposta da triagem nao contem objeto JSON.")
+    return json.loads(texto[inicio:fim + 1])
+
+
+def _normalizar_lista(valor) -> list[str]:
+    if not isinstance(valor, list):
+        return []
+    saida = []
+    for item in valor:
+        if isinstance(item, str):
+            item_limpo = item.strip().lower()
+            if item_limpo:
+                saida.append(item_limpo)
+    return sorted(set(saida))
+
+
+def _normalizar_triagem_llm(dados: dict) -> dict:
+    if not isinstance(dados, dict):
+        raise ValueError("Triagem deve ser um objeto JSON.")
+
+    nivel = str(dados.get("nivel", "")).strip().lower()
+    if nivel not in _NIVEIS_TRIAGEM:
+        raise ValueError(f"Nivel de triagem invalido: {nivel!r}")
+
+    risco_imediato = bool(dados.get("risco_imediato", False))
+    acao = str(dados.get("acao_resposta", "")).strip().lower()
+    if acao not in _ACOES_TRIAGEM:
+        if risco_imediato:
+            acao = "emergencia_imediata"
+        elif nivel == "fachada":
+            acao = "fachada"
+        elif nivel == "pedido_orientacao":
+            acao = "orientar_com_passos"
+        elif nivel == "ambigua":
+            acao = "acolher_e_investigar"
+        else:
+            acao = "acolher_e_perguntar_seguranca"
+
+    if risco_imediato and nivel in {"fachada", "ambigua", "pedido_orientacao", "violencia_sem_risco_imediato"}:
+        nivel = "risco_grave"
+    if nivel in {"risco_grave", "risco_extremo"}:
+        risco_imediato = True
+
+    return {
+        "nivel": nivel,
+        "risco_imediato": risco_imediato,
+        "tipos_violencia": _normalizar_lista(dados.get("tipos_violencia")),
+        "sinais_fonar": _normalizar_lista(dados.get("sinais_fonar")),
+        "acao_resposta": acao,
+        "origem": "llm",
+    }
+
+
+def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> dict:
+    """Classifica a mensagem em JSON estruturado; nao gera resposta para a usuaria."""
+    historico = historico or []
+    pergunta_limpa, _ = sanitizar_mensagem(pergunta, session_id)
+    pergunta_provedor = redigir_pii(
+        pergunta_limpa,
+        session_id=session_id,
+        contexto="triagem fonar llm",
+    )
+    historico_truncado = truncar_historico(historico, max_tokens=450)
+    linhas_historico = []
+    for msg in historico_truncado[-4:]:
+        role = msg.get("role", "?")
+        conteudo = msg.get("content") or msg.get("mensagem") or ""
+        if role == "user":
+            conteudo, _ = sanitizar_mensagem(conteudo, session_id)
+        conteudo = redigir_pii(conteudo, session_id=session_id, contexto="historico triagem")
+        linhas_historico.append(f"{role}: {conteudo}")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Voce e um classificador de triagem para um chatbot de acolhimento "
+                "a mulheres que podem sofrer abuso do marido, companheiro, namorado ou ex. "
+                "Nao responda a usuaria. Retorne SOMENTE JSON valido, sem markdown.\n\n"
+                "Classifique pelo sentido contextual, nao por uma palavra isolada. "
+                "Termos como casa, janela, escuro ou trancada NAO significam fachada se "
+                "aparecem junto de marido, companheiro, controle, medo, isolamento ou abuso.\n\n"
+                "Niveis permitidos: fachada, ambigua, pedido_orientacao, "
+                "violencia_sem_risco_imediato, risco_moderado, risco_grave, risco_extremo.\n"
+                "- fachada: dicas reais de casa/limpeza/organizacao ou saudacao sem sinal sensivel.\n"
+                "- ambigua: possivel sofrimento/controle, mas precisa entender melhor.\n"
+                "- violencia_sem_risco_imediato: abuso/violencia declarada sem perigo agora.\n"
+                "- risco_grave/extremo: ameaca de morte, arma, agressor presente, carcere, impossibilidade de falar.\n\n"
+                "Acoes permitidas: fachada, acolher_e_investigar, orientar_com_passos, "
+                "acolher_e_perguntar_seguranca, acolher_com_discricao, emergencia_imediata.\n\n"
+                "Schema obrigatorio:\n"
+                "{\"nivel\":\"...\",\"risco_imediato\":false,"
+                "\"tipos_violencia\":[\"digital|fisica|psicologica|patrimonial|sexual|ameaca\"],"
+                "\"sinais_fonar\":[\"...\"],\"acao_resposta\":\"...\"}"
+            ),
+        },
+        {
+            "role": "system",
+            "content": "Historico recente:\n" + ("\n".join(linhas_historico) or "Nenhum."),
+        },
+        {"role": "user", "content": delimitar_conteudo_usuario(pergunta_provedor)},
+    ]
+
+    try:
+        resposta = criar_chat_groq(
+            messages=messages,
+            model="llama-3.3-70b-versatile",
+            temperature=0,
+            max_tokens=350,
+        )
+        return _normalizar_triagem_llm(_extrair_json_objeto(resposta))
+    except Exception as e:
+        print(f"[Triagem LLM] Falhou; usando fallback local: {e}")
+        triagem = avaliar_triagem_fonar(pergunta_limpa, historico)
+        triagem["origem"] = "fallback_local"
+        return triagem
+
+
 # Cache de estado da coleção — evita chamar colecao.count() a cada requisição.
 # Inicializado como None (não verificado). Após a primeira verificação
 # bem-sucedida que encontre a coleção populada, torna-se True e permanece

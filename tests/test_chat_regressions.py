@@ -30,6 +30,14 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                 patch.object(app, "_servicos_prontos", False),
                 patch.object(app, "garantir_servicos", side_effect=fail_if_called),
                 patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", return_value={
+                    "nivel": "fachada",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": [],
+                    "acao_resposta": "fachada",
+                    "origem": "llm",
+                }),
                 patch.object(app, "detectar_modo", return_value="fachada"),
                 patch.object(app, "responder_pergunta", return_value="ok"),
             ):
@@ -81,6 +89,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             with (
                 patch.object(app, "_servicos_prontos", False),
                 patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=fail_if_called) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
                 patch.object(app, "responder_pergunta", side_effect=fail_if_called) as responder_mock,
             ):
@@ -92,6 +101,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                         "X-Session-Token": delete_token,
                     },
                 )
+                triagem_mock.assert_not_called()
                 modo_mock.assert_not_called()
                 responder_mock.assert_not_called()
 
@@ -113,6 +123,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             with (
                 patch.object(app, "_servicos_prontos", False),
                 patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=fail_if_called) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
                 patch.object(app, "responder_pergunta", side_effect=fail_if_called) as responder_mock,
             ):
@@ -124,6 +135,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                         "X-Session-Token": delete_token,
                     },
                 )
+                triagem_mock.assert_not_called()
                 modo_mock.assert_not_called()
                 responder_mock.assert_not_called()
 
@@ -142,17 +154,26 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             session_id, delete_token = app.registrar_sessao()
 
             captured = {}
+            triagem_llm = {
+                "nivel": "violencia_sem_risco_imediato",
+                "risco_imediato": False,
+                "tipos_violencia": ["digital"],
+                "sinais_fonar": ["exposicao_sem_consentimento"],
+                "acao_resposta": "acolher_e_perguntar_seguranca",
+                "origem": "llm",
+            }
 
             def responder_fake(*args, **kwargs):
                 captured["triagem"] = kwargs.get("triagem")
                 return "acolhimento gerado pela LLM"
 
             def fail_if_called(*args, **kwargs):
-                raise AssertionError("FONAR should decide mode without Groq mode detection")
+                raise AssertionError("Legacy mode detector should not classify this case")
 
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", return_value=triagem_llm) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
                 patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
@@ -167,6 +188,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                         "X-Session-Token": delete_token,
                     },
                 )
+                triagem_mock.assert_called_once()
                 modo_mock.assert_not_called()
                 responder_mock.assert_called_once()
 
@@ -177,6 +199,46 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertEqual(captured["triagem"]["nivel"], "violencia_sem_risco_imediato")
         self.assertFalse(captured["triagem"]["risco_imediato"])
         self.assertIn("digital", captured["triagem"]["tipos_violencia"])
+
+    def test_llm_triage_can_route_control_context_to_real_without_local_casework(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            triagem_llm = {
+                "nivel": "violencia_sem_risco_imediato",
+                "risco_imediato": False,
+                "tipos_violencia": ["psicologica"],
+                "sinais_fonar": ["restricao_liberdade"],
+                "acao_resposta": "acolher_e_perguntar_seguranca",
+                "origem": "llm",
+            }
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", return_value=triagem_llm) as triagem_mock,
+                patch.object(app, "detectar_modo", side_effect=AssertionError("old detector should not decide")),
+                patch.object(app, "responder_pergunta", return_value="acolhimento"),
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={
+                        "mensagem": "meu marido nunca abre a janela de casa, sempre fico no escuro",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["modo"], "real")
+        triagem_mock.assert_called_once()
 
     def test_rag_indexing_is_disabled_by_default(self):
         import app

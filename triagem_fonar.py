@@ -264,11 +264,43 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     )
 
 
+def avaliar_emergencia_obvia(texto: str) -> bool:
+    """Cinto de seguranca local: apenas casos que nao podem esperar LLM."""
+    t = _normalizar(texto)
+
+    perigo_declarado = _tem(t, [
+        "estou em perigo", "perigo agora", "risco agora", "risco imediato",
+        "risco de vida", "socorro",
+    ])
+    arma = _tem(t, [
+        "arma", "faca", "revolver", "pistola", "espingarda", "facao", "canivete",
+    ])
+    agressor_presente = _tem(t, [
+        "ele esta aqui", "ele ta aqui", "ele esta perto", "ele ta perto",
+        "ele pode ouvir", "esta me ouvindo", "ele chegou",
+    ])
+    comunicacao_insegura = _tem(t, [
+        "nao posso falar", "nao posso digitar", "ele pode ouvir",
+        "estou trancada", "me trancou", "presa em casa", "nao consigo sair",
+    ])
+    ameaca_morte = _tem(t, [
+        "vai me matar", "disse que vai me matar", "ameacou me matar",
+        "ameaca de morte", "matar amanha", "matar hoje",
+    ])
+
+    return (
+        perigo_declarado
+        or comunicacao_insegura
+        or (arma and agressor_presente)
+        or ameaca_morte
+    )
+
+
 def triagem_indica_modo_real(triagem: dict) -> bool:
     nivel = triagem.get("nivel")
-    if nivel in {NIVEL_ORIENTACAO, NIVEL_VIOLENCIA, NIVEL_MODERADO, NIVEL_GRAVE, NIVEL_EXTREMO}:
+    if nivel in {NIVEL_AMBIGUA, NIVEL_ORIENTACAO, NIVEL_VIOLENCIA, NIVEL_MODERADO, NIVEL_GRAVE, NIVEL_EXTREMO}:
         return True
-    return nivel == NIVEL_AMBIGUA and "pedido_ajuda_ambiguo" in triagem.get("sinais_fonar", [])
+    return False
 
 
 def instrucao_llm_triagem(triagem: dict) -> str:

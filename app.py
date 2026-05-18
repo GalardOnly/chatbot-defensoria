@@ -26,8 +26,9 @@ from conteudo_chat import (
     garantir_base_conhecimento,
     sanitizar_mensagem,
     redigir_pii,
+    classificar_triagem_llm,
 )
-from triagem_fonar import avaliar_triagem_fonar, triagem_indica_modo_real
+from triagem_fonar import avaliar_triagem_fonar, avaliar_emergencia_obvia, triagem_indica_modo_real
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -970,7 +971,20 @@ def chat():
     mensagem_limpa, alertas = sanitizar_mensagem(mensagem, session_id)
 
     historico_anterior = carregar_historico(session_id)
-    triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+    mensagem_normalizada = mensagem_limpa.lower().strip()
+    saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
+    if mensagem_normalizada in saudacoes_fachada:
+        triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+        triagem["origem"] = "local_saudacao"
+    elif avaliar_emergencia_obvia(mensagem_limpa):
+        triagem = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+        triagem["origem"] = "local_emergencia_obvia"
+    else:
+        triagem = classificar_triagem_llm(
+            mensagem_limpa,
+            historico=historico_anterior,
+            session_id=session_id,
+        )
     mensagem_id = salvar_mensagem(
         session_id,
         "user",
@@ -1016,17 +1030,15 @@ def chat():
         for m in historico_sessao[-8:] if m["role"] == "user"
     )
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
-    if triagem.get("nivel") == "fachada":
-        modo_local = "fachada"
-    elif triagem_indica_modo_real(triagem):
-        modo_local = "real"
-    else:
-        modo_local = detectar_modo_local(mensagem_limpa)
-    mensagem_normalizada = mensagem_limpa.lower().strip()
-    saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
+    modo_final = "real" if (
+        classificacao_indica_real
+        or triagem_indica_modo_real(triagem)
+        or teve_real_recente
+        or teve_real_no_historico
+    ) else "fachada"
 
     if (
-        modo_local == "fachada"
+        modo_final == "fachada"
         and mensagem_normalizada in saudacoes_fachada
         and not teve_real_recente
         and not teve_real_no_historico
@@ -1055,28 +1067,6 @@ def chat():
             "resposta": resposta,
             "modo": "real",
         })
-
-    if modo_local in {"real", "fachada"}:
-        modo_llm = modo_local
-    else:
-        try:
-            modo_llm = detectar_modo(mensagem_limpa, historico=historico_sessao, session_id=session_id)
-        except Exception as e:
-            print(f"[chat] Aviso ao detectar modo: {e}")
-            modo_llm = "real" if (teve_real_recente or classificacao_indica_real) else "fachada"
-
-    if classificacao_indica_real or modo_local == "real":
-        modo_final = "real"
-    elif modo_llm == "real":
-        modo_final = "real"
-    elif teve_real_recente or teve_real_no_historico:
-        modo_final = "real"
-    elif modo_local == "fachada":
-        modo_final = "fachada"
-    elif modo_llm == "fachada":
-        modo_final = "fachada"
-    else:
-        modo_final = "fachada"
 
     # ── Resposta da LLM ───────────────────────────────────────────────────────
     historico_api = [
