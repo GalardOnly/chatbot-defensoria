@@ -150,34 +150,34 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
     if "restricao_liberdade" in sinais:
         if "presa em casa" in texto:
             return (
-                "Você contou que ele diz que você deve ficar presa em casa. "
-                "Isso é uma forma séria de controle, e não é culpa sua."
+                "Sinto muito que você esteja vivendo esse tipo de controle. "
+                "Ninguém deveria limitar sua liberdade ou te deixar com medo dentro de casa, e não é culpa sua."
             )
         if "trancada" in texto or "trancado" in texto:
             return (
-                "Você contou que ele tenta te manter trancada ou limitada dentro de casa. "
+                "Sinto muito que você esteja sendo limitada dentro da própria casa. "
                 "Isso é uma forma séria de controle, e não é culpa sua."
             )
         return (
-            "Você descreveu que ele tenta limitar sua liberdade. "
-            "Isso é sério, e não é culpa sua."
+            "Sinto muito que você esteja passando por esse controle. "
+            "Sua liberdade e sua segurança importam, e não é culpa sua."
         )
 
     if "digital" in tipos:
         return (
-            "Você contou que ele te expõe nas redes sem seu consentimento. "
-            "Isso fere sua privacidade e não é culpa sua."
+            "Sinto muito que sua privacidade esteja sendo violada. "
+            "Você tem direito a consentimento e respeito, e não é culpa sua."
         )
 
     if "fisica" in tipos:
         return (
-            "Você contou que ele te agride. Nenhuma agressão é aceitável, "
+            "Sinto muito que você esteja sofrendo agressões. Nenhuma violência é aceitável, "
             "e você não tem culpa pelo que ele fez."
         )
 
     if "ameaca_carcere" in sinais:
         return (
-            "Você contou que ele usa ameaças para tentar te controlar. "
+            "Sinto muito que ameaças estejam sendo usadas para te controlar. "
             "Isso é sério, e não é culpa sua."
         )
 
@@ -1158,8 +1158,9 @@ REGRA DE FONTES OFICIAIS:
 
 FLUXO DE ACOLHIMENTO E RISCO:
 Use a TRIAGEM FONAR INTERNA, quando enviada, como guia de tom e prioridade.
-Acolhimento configurado no nível 4 de 5: antes de orientar, espelhe o fato concreto
-que a usuária contou, valide que não é culpa dela e faça uma pergunta curta e contextual.
+Acolhimento configurado no nível 4 de 5: antes de orientar, acolha pelo significado
+do relato. Não repita literalmente a frase da usuária. Reconheça a dor, controle,
+medo ou violação descrita, valide que não é culpa dela e faça uma pergunta curta e contextual.
 
 1. Risco imediato/grave: agressor por perto, ameaça de morte, arma, cárcere,
 impossibilidade de falar, risco agora ou falsa segurança com ameaça futura.
@@ -1169,9 +1170,9 @@ Delegacia Metropolitana de Horizonte, medida protetiva e BO eletrônico.
 2. Violência declarada sem risco imediato: exposição digital, agressão física relatada,
 humilhação, controle, ameaça não iminente ou abuso do marido/companheiro sem sinal de
 perigo agora. Nesses casos, NÃO abra com telefones nem lista de serviços. Primeiro
-espelhe o fato específico ("você contou que ele..."), valide que não é culpa dela e
-faça uma pergunta curta de segurança contextual. Depois oriente com calma, se ela pedir
-ou disser que está segura.
+acolha sem copiar a fala dela. Evite começar com "você contou que". Responda ao sentido
+do relato, valide que não é culpa dela e faça uma pergunta curta de segurança contextual.
+Depois oriente com calma, se ela pedir ou disser que está segura.
 
 3. Pedido de orientação: explique caminhos oficiais em passos simples, sem pressionar
 denúncia.

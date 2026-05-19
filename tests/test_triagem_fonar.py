@@ -20,15 +20,15 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("exposicao_sem_consentimento", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
 
-    def test_instrucao_llm_pede_espelhamento_no_acolhimento(self):
+    def test_instrucao_llm_pede_acolhimento_sem_repeticao_literal(self):
         triagem = avaliar_triagem_fonar(
             "meu marido diz que eu devo ficar presa em casa"
         )
 
         instrucao = instrucao_llm_triagem(triagem).lower()
 
-        self.assertIn("espelhe", instrucao)
-        self.assertIn("fato concreto", instrucao)
+        self.assertIn("nao repita literalmente", instrucao)
+        self.assertIn("significado", instrucao)
         self.assertIn("nao abra com telefones", instrucao)
         self.assertIn("uma pergunta", instrucao)
 
@@ -95,6 +95,16 @@ class TriagemFonarTest(unittest.TestCase):
     def test_controle_para_ficar_trancada_em_casa_nao_vira_fachada(self):
         triagem = avaliar_triagem_fonar(
             "ele sempre me diz que eu devo ficar trancada em casa"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+
+    def test_trancar_portao_para_impedir_saida_vira_restricao_liberdade(self):
+        triagem = avaliar_triagem_fonar(
+            "meu marido tranca o portao de casa quando sai"
         )
 
         self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")

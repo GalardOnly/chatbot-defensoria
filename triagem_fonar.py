@@ -110,7 +110,9 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "nao deixa pegar o celular", "ficar presa em casa",
         "devo ficar presa em casa", "mandou ficar presa em casa",
         "me deixa presa em casa", "me deixando presa em casa",
-        "deixando presa em casa",
+        "deixando presa em casa", "tranca o portao", "tranca o portao de casa",
+        "trancou o portao", "trancou o portao de casa", "fecha o portao",
+        "fecha o portao de casa", "portao trancado",
     ]
 
     digitais = [
@@ -409,8 +411,8 @@ def instrucao_llm_triagem(triagem: dict) -> str:
     elif nivel == NIVEL_VIOLENCIA:
         prioridade = (
             "Prioridade: acolhimento antes de informacao. Nao abra com telefones. "
-            "Espelhe o fato concreto relatado pela usuaria em uma frase curta, "
-            "valide a experiencia, diga que nao e culpa dela e faca uma pergunta "
+            "Nao repita literalmente a fala da usuaria; acolha pelo significado "
+            "do relato em uma frase curta, valide a experiencia, diga que nao e culpa dela e faca uma pergunta "
             "contextual de seguranca. Nao entregue lista de contatos neste primeiro acolhimento."
         )
     elif nivel == NIVEL_ORIENTACAO:

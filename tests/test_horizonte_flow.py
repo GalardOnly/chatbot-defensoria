@@ -115,11 +115,28 @@ class HorizonteFlowTest(unittest.TestCase):
         )
 
         resposta_lower = resposta.lower()
-        self.assertIn("ficar presa em casa", resposta_lower)
+        self.assertIn("controle", resposta_lower)
         self.assertIn("não é culpa", resposta_lower)
         self.assertIn("conversar com segurança", resposta_lower)
+        self.assertNotIn("você contou", resposta_lower)
+        self.assertNotIn("ficar presa em casa", resposta_lower)
         self.assertNotIn("CANAIS OFICIAIS", resposta)
         self.assertNotIn("Rua Juvenal de Castro", resposta)
+
+    def test_fallback_acolhe_sem_repetir_relato_literal(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "meu marido tranca o portao de casa quando sai",
+            modo="real",
+        )
+
+        resposta_lower = resposta.lower()
+        self.assertIn("controle", resposta_lower)
+        self.assertIn("não é culpa", resposta_lower)
+        self.assertNotIn("você contou", resposta_lower)
+        self.assertNotIn("tranca o portao", resposta_lower)
+        self.assertNotIn("portao de casa", resposta_lower)
 
     def test_llm_context_injects_official_links(self):
         import conteudo_chat
