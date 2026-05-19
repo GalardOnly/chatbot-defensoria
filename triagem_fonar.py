@@ -409,7 +409,9 @@ def instrucao_llm_triagem(triagem: dict) -> str:
     elif nivel == NIVEL_VIOLENCIA:
         prioridade = (
             "Prioridade: acolhimento antes de informacao. Nao abra com telefones. "
-            "Valide a experiencia, diga que nao e culpa dela e pergunte se ela esta segura agora."
+            "Espelhe o fato concreto relatado pela usuaria em uma frase curta, "
+            "valide a experiencia, diga que nao e culpa dela e faca uma pergunta "
+            "contextual de seguranca. Nao entregue lista de contatos neste primeiro acolhimento."
         )
     elif nivel == NIVEL_ORIENTACAO:
         prioridade = (

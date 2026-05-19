@@ -4,6 +4,7 @@ from triagem_fonar import (
     avaliar_triagem_fonar,
     avaliar_emergencia_obvia,
     historico_indica_modo_real,
+    instrucao_llm_triagem,
 )
 
 
@@ -18,6 +19,18 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("digital", triagem["tipos_violencia"])
         self.assertIn("exposicao_sem_consentimento", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+    def test_instrucao_llm_pede_espelhamento_no_acolhimento(self):
+        triagem = avaliar_triagem_fonar(
+            "meu marido diz que eu devo ficar presa em casa"
+        )
+
+        instrucao = instrucao_llm_triagem(triagem).lower()
+
+        self.assertIn("espelhe", instrucao)
+        self.assertIn("fato concreto", instrucao)
+        self.assertIn("nao abra com telefones", instrucao)
+        self.assertIn("uma pergunta", instrucao)
 
     def test_agressao_fisica_relato_sem_contexto_de_agora_nao_vira_extremo(self):
         triagem = avaliar_triagem_fonar("quando peco para ele nao postar ele me bate")
