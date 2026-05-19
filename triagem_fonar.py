@@ -107,7 +107,10 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "proibiu sair", "me impede de sair", "me prende em casa",
         "me deixando trancada", "me deixa trancada", "deixando trancada",
         "trancada em casa", "sem ver a luz do sol", "nao me deixa pegar o celular",
-        "nao deixa pegar o celular",
+        "nao deixa pegar o celular", "ficar presa em casa",
+        "devo ficar presa em casa", "mandou ficar presa em casa",
+        "me deixa presa em casa", "me deixando presa em casa",
+        "deixando presa em casa",
     ]
 
     digitais = [
@@ -155,7 +158,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     ]
     carcere_ou_silencio = [
         "nao posso falar", "nao posso digitar", "estou trancada",
-        "me trancou", "presa em casa", "nao consigo sair", "socorro",
+        "me trancou", "estou presa em casa", "to presa em casa",
+        "estou presa dentro de casa", "nao consigo sair", "socorro",
     ]
     perigo_declarado = [
         "estou em perigo", "perigo agora", "risco agora", "risco imediato",
@@ -325,7 +329,8 @@ def avaliar_emergencia_obvia(texto: str) -> bool:
     ])
     comunicacao_insegura = _tem(t, [
         "nao posso falar", "nao posso digitar", "ele pode ouvir",
-        "estou trancada", "me trancou", "presa em casa", "nao consigo sair",
+        "estou trancada", "me trancou", "estou presa em casa",
+        "to presa em casa", "estou presa dentro de casa", "nao consigo sair",
     ])
     ameaca_morte = _tem(t, [
         "vai me matar", "disse que vai me matar", "ameacou me matar",

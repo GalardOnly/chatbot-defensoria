@@ -89,6 +89,27 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("psicologica", triagem["tipos_violencia"])
         self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
 
+    def test_ordem_para_ficar_presa_em_casa_nao_vira_emergencia_automatica(self):
+        triagem = avaliar_triagem_fonar(
+            "meu marido diz que eu devo ficar presa em casa"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+        self.assertFalse(
+            avaliar_emergencia_obvia("meu marido diz que eu devo ficar presa em casa")
+        )
+
+    def test_estou_presa_em_casa_agora_continua_emergencia(self):
+        triagem = avaliar_triagem_fonar("estou presa em casa e nao consigo sair")
+
+        self.assertEqual(triagem["nivel"], "risco_grave")
+        self.assertTrue(triagem["risco_imediato"])
+        self.assertIn("restricao_ou_comunicacao_insegura", triagem["sinais_fonar"])
+        self.assertTrue(avaliar_emergencia_obvia("estou presa em casa e nao consigo sair"))
+
     def test_ameaca_de_prender_vira_violencia_psicologica_sem_emergencia_automatica(self):
         triagem = avaliar_triagem_fonar(
             "diz que se eu nao obedecer ele vai me prender"
