@@ -1,6 +1,10 @@
 import unittest
 
-from triagem_fonar import avaliar_triagem_fonar, avaliar_emergencia_obvia
+from triagem_fonar import (
+    avaliar_triagem_fonar,
+    avaliar_emergencia_obvia,
+    historico_indica_modo_real,
+)
 
 
 class TriagemFonarTest(unittest.TestCase):
@@ -66,6 +70,15 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("possivel_controle_domestico", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "acolher_e_investigar")
 
+    def test_marido_impoe_limpeza_da_casa_nao_vira_fachada(self):
+        triagem = avaliar_triagem_fonar(
+            "meu marido diz que eu devo limpar a casa sozinha"
+        )
+
+        self.assertEqual(triagem["nivel"], "ambigua")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("possivel_controle_domestico", triagem["sinais_fonar"])
+
     def test_controle_para_ficar_trancada_em_casa_nao_vira_fachada(self):
         triagem = avaliar_triagem_fonar(
             "ele sempre me diz que eu devo ficar trancada em casa"
@@ -75,6 +88,40 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertFalse(triagem["risco_imediato"])
         self.assertIn("psicologica", triagem["tipos_violencia"])
         self.assertIn("restricao_liberdade", triagem["sinais_fonar"])
+
+    def test_ameaca_de_prender_vira_violencia_psicologica_sem_emergencia_automatica(self):
+        triagem = avaliar_triagem_fonar(
+            "diz que se eu nao obedecer ele vai me prender"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("ameaca_carcere", triagem["sinais_fonar"])
+
+    def test_estado_da_sessao_usa_triagem_fonar_mesmo_sem_classificador_rf(self):
+        historico = [
+            {
+                "role": "user",
+                "mensagem": "meu marido diz que eu devo limpar a casa sozinha",
+                "tipo_violencia": None,
+                "nivel_risco": "ambigua",
+                "risco_imediato": False,
+                "tipos_violencia_fonar": [],
+                "sinais_fonar": ["possivel_controle_domestico"],
+            },
+            {
+                "role": "user",
+                "mensagem": "boa noite",
+                "tipo_violencia": None,
+                "nivel_risco": "fachada",
+                "risco_imediato": False,
+                "tipos_violencia_fonar": [],
+                "sinais_fonar": [],
+            },
+        ]
+
+        self.assertTrue(historico_indica_modo_real(historico))
 
     def test_marido_deixando_trancada_sem_luz_vira_restricao_liberdade(self):
         triagem = avaliar_triagem_fonar(

@@ -28,7 +28,12 @@ from conteudo_chat import (
     redigir_pii,
     classificar_triagem_llm,
 )
-from triagem_fonar import avaliar_triagem_fonar, avaliar_emergencia_obvia, triagem_indica_modo_real
+from triagem_fonar import (
+    avaliar_triagem_fonar,
+    avaliar_emergencia_obvia,
+    historico_indica_modo_real,
+    triagem_indica_modo_real,
+)
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -1035,14 +1040,8 @@ def chat():
             print(f"[Classificador] Aviso: {e}")
 
     # ── Detecção de modo ──────────────────────────────────────────────────────
-    teve_real_no_historico = any(
-        m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
-        for m in historico_sessao if m["role"] == "user"
-    )
-    teve_real_recente = any(
-        m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
-        for m in historico_sessao[-8:] if m["role"] == "user"
-    )
+    teve_real_no_historico = historico_indica_modo_real(historico_sessao)
+    teve_real_recente = historico_indica_modo_real(historico_sessao[-8:])
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
     modo_final = "real" if (
         classificacao_indica_real

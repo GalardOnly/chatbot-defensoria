@@ -98,6 +98,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     controle_domestico_ambiguo = [
         "escuro", "janela", "nao abre", "nunca abre", "ficar em casa",
         "me deixa no escuro", "no escuro", "me prende", "trancada em casa",
+        "devo limpar", "tenho que limpar", "limpar a casa sozinha",
+        "limpar toda a casa", "homem da casa",
     ]
     restricao_liberdade = [
         "ficar trancada", "devo ficar trancada", "mandou ficar trancada",
@@ -124,6 +126,11 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "me humilha", "humilha", "me xinga", "xinga", "me controla",
         "controla", "me isola", "nao deixa eu sair", "ciume", "ameaca",
         "ameacou", "chantagem", "medo dele",
+    ]
+    ameacas_carcere = [
+        "vai me prender", "vai me trancar", "ameaca me prender",
+        "ameacou me prender", "se eu nao obedecer ele vai me prender",
+        "se eu nao obedecer vai me prender",
     ]
     sexuais = [
         "estupro", "abusou sexualmente", "me obriga a transar",
@@ -171,6 +178,10 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("agressao_fisica")
     if _tem(t, psicologicas):
         tipos.append("psicologica")
+        sinais.append("violencia_psicologica")
+    if _tem(t, ameacas_carcere):
+        tipos.append("psicologica")
+        sinais.append("ameaca_carcere")
         sinais.append("violencia_psicologica")
     if _tem(t, restricao_liberdade):
         tipos.append("psicologica")
@@ -333,6 +344,50 @@ def triagem_indica_modo_real(triagem: dict) -> bool:
     nivel = triagem.get("nivel")
     if nivel in {NIVEL_AMBIGUA, NIVEL_ORIENTACAO, NIVEL_VIOLENCIA, NIVEL_MODERADO, NIVEL_GRAVE, NIVEL_EXTREMO}:
         return True
+    return False
+
+
+def historico_indica_modo_real(historico: list[dict] | None) -> bool:
+    """
+    Decide se a sessao ja entrou em contexto sensivel usando metadados salvos.
+
+    O classificador RF pode estar ausente ou nao reconhecer um relato sutil. Nesses
+    casos, os campos FONAR gravados no banco precisam preservar o estado real da
+    conversa para que uma saudacao ou termo domestico nao devolva o bot a fachada.
+    """
+    sinais_reais = {
+        "possivel_controle_domestico",
+        "restricao_liberdade",
+        "restricao_ou_comunicacao_insegura",
+        "violencia_psicologica",
+        "agressao_fisica",
+        "ameaca_carcere",
+        "ameaca_morte",
+        "controle_familiar",
+        "exposicao_sem_consentimento",
+        "violencia_sexual",
+        "violencia_patrimonial",
+    }
+    niveis_reais = {
+        NIVEL_ORIENTACAO,
+        NIVEL_VIOLENCIA,
+        NIVEL_MODERADO,
+        NIVEL_GRAVE,
+        NIVEL_EXTREMO,
+    }
+
+    for msg in historico or []:
+        if msg.get("role") != "user":
+            continue
+        tipo_violencia = msg.get("tipo_violencia")
+        if tipo_violencia and tipo_violencia != "nao_violencia":
+            return True
+        if msg.get("risco_imediato"):
+            return True
+        if msg.get("nivel_risco") in niveis_reais:
+            return True
+        if set(msg.get("sinais_fonar") or []) & sinais_reais:
+            return True
     return False
 
 
