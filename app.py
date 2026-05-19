@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import re
 import base64
+import copy
 from functools import wraps
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -310,6 +311,25 @@ def session_id_valido(session_id: str) -> bool:
 
 def normalizar_resposta_publica(texto: str) -> str:
     return re.sub(r"\n{2,}", "\n", texto or "").strip()
+
+
+def _hash_mensagem_para_trace(mensagem: str) -> str:
+    return hashlib.sha256((mensagem or "").encode("utf-8")).hexdigest()[:16]
+
+
+def _trace_seguro_chat(trace: dict) -> dict:
+    trace = copy.deepcopy(trace)
+    session_id = trace.get("session_id")
+    if session_id:
+        trace["session_id"] = f"{session_id[:8]}..."
+    return trace
+
+
+def registrar_trace_chat(trace: dict) -> None:
+    global _ultimo_trace_chat
+    trace_seguro = _trace_seguro_chat(trace)
+    _ultimo_trace_chat = trace_seguro
+    print(f"[chat-trace] {json.dumps(trace_seguro, ensure_ascii=False)}")
 
 
 def gerar_session_id() -> str:
@@ -820,6 +840,7 @@ colecao            = None
 _init_lock         = threading.Lock()
 _servicos_prontos  = False
 _ultimo_erro_chat  = None
+_ultimo_trace_chat = None
 
 # Event sinalizado pela thread de boot quando todos os serviços estiverem prontos.
 # Qualquer thread de request que chegar antes do boot terminar chama
@@ -950,6 +971,12 @@ def chat():
     data       = request.get_json(silent=True) or {}
     mensagem   = (data.get("mensagem") or "").strip()
     session_id = (data.get("session_id") or "").strip()
+    trace_chat = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "session_id": session_id,
+        "mensagem_hash": _hash_mensagem_para_trace(mensagem),
+        "eventos": [],
+    }
 
     if not mensagem:
         return jsonify({"erro": "Campo mensagem obrigatório."}), 400
@@ -983,6 +1010,13 @@ def chat():
     mensagem_normalizada = mensagem_limpa.lower().strip()
     saudacoes_fachada = {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}
     triagem_local = avaliar_triagem_fonar(mensagem_limpa, historico_anterior)
+    trace_chat["triagem_local"] = {
+        "nivel": triagem_local.get("nivel"),
+        "risco_imediato": bool(triagem_local.get("risco_imediato")),
+        "tipos_violencia": triagem_local.get("tipos_violencia") or [],
+        "sinais_fonar": triagem_local.get("sinais_fonar") or [],
+        "acao_resposta": triagem_local.get("acao_resposta"),
+    }
     if mensagem_normalizada in saudacoes_fachada:
         triagem = triagem_local
         triagem["origem"] = "local_saudacao"
@@ -1004,6 +1038,14 @@ def chat():
             historico=historico_anterior,
             session_id=session_id,
         )
+    trace_chat["triagem_final"] = {
+        "origem": triagem.get("origem"),
+        "nivel": triagem.get("nivel"),
+        "risco_imediato": bool(triagem.get("risco_imediato")),
+        "tipos_violencia": triagem.get("tipos_violencia") or [],
+        "sinais_fonar": triagem.get("sinais_fonar") or [],
+        "acao_resposta": triagem.get("acao_resposta"),
+    }
     mensagem_id = salvar_mensagem(
         session_id,
         "user",
@@ -1049,6 +1091,13 @@ def chat():
         or teve_real_recente
         or teve_real_no_historico
     ) else "fachada"
+    trace_chat["decisao_modo"] = {
+        "modo_final": modo_final,
+        "classificacao_indica_real": classificacao_indica_real,
+        "triagem_indica_real": triagem_indica_modo_real(triagem),
+        "teve_real_recente": teve_real_recente,
+        "teve_real_no_historico": teve_real_no_historico,
+    }
 
     if (
         modo_final == "fachada"
@@ -1056,6 +1105,8 @@ def chat():
         and not teve_real_recente
         and not teve_real_no_historico
     ):
+        trace_chat["resposta_origem"] = "fallback_fachada_saudacao"
+        registrar_trace_chat(trace_chat)
         resposta = resposta_contingencia(
             pergunta=mensagem,
             modo="fachada",
@@ -1071,6 +1122,8 @@ def chat():
         })
 
     if triagem.get("risco_imediato"):
+        trace_chat["resposta_origem"] = "fallback_risco_imediato"
+        registrar_trace_chat(trace_chat)
         resposta = resposta_contingencia(
             pergunta=mensagem,
             modo="real",
@@ -1090,6 +1143,7 @@ def chat():
         {"role": m["role"], "content": m["mensagem"]} for m in historico_sessao
     ]
     try:
+        trace_chat["llm_tentada"] = True
         resposta = responder_pergunta(
             pergunta=mensagem_limpa,          # versão sanitizada
             embedding_service=embedding_service,
@@ -1101,9 +1155,15 @@ def chat():
             session_id=session_id,            # para log de auditoria
         )
         _ultimo_erro_chat = None
+        trace_chat["resposta_origem"] = "llm"
     except Exception as e:
         print(f"[chat] ERRO: {e}")
         _ultimo_erro_chat = str(e)
+        trace_chat["resposta_origem"] = "fallback_por_erro_llm"
+        trace_chat["erro_llm"] = {
+            "tipo": type(e).__name__,
+            "mensagem": str(e)[:500],
+        }
         resposta = resposta_contingencia(
             pergunta=mensagem,
             modo=modo_final,
@@ -1111,6 +1171,8 @@ def chat():
             triagem=triagem,
             historico=historico_api,
         )
+    finally:
+        registrar_trace_chat(trace_chat)
 
     resposta = normalizar_resposta_publica(resposta)
     salvar_mensagem(session_id, "assistant", resposta)
@@ -1312,6 +1374,7 @@ def health_admin():
         "gemini_configurado":  bool(os.getenv("GEMINI_API_KEY")),
         "colecao_count":       colecao_count,
         "ultimo_erro_chat":    _ultimo_erro_chat,
+        "ultimo_trace_chat":   _ultimo_trace_chat,
     })
 
 
