@@ -1138,6 +1138,23 @@ def chat():
             "modo": "real",
         })
 
+    if triagem.get("acao_resposta") == "acolher_e_perguntar_seguranca":
+        trace_chat["resposta_origem"] = "fallback_acolhimento_inicial"
+        registrar_trace_chat(trace_chat)
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo="real",
+            classificacao=classificacao,
+            triagem=triagem,
+            historico=historico_sessao,
+        )
+        resposta = normalizar_resposta_publica(resposta)
+        salvar_mensagem(session_id, "assistant", resposta)
+        return jsonify({
+            "resposta": resposta,
+            "modo": "real",
+        })
+
     # ── Resposta da LLM ───────────────────────────────────────────────────────
     historico_api = [
         {"role": m["role"], "content": m["mensagem"]} for m in historico_sessao

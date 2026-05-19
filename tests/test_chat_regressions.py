@@ -145,19 +145,13 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("190", data["resposta"])
         self.assertIn("180", data["resposta"])
 
-    def test_declared_abuse_without_immediate_risk_uses_llm_response_with_local_triage(self):
+    def test_declared_abuse_without_immediate_risk_uses_deterministic_first_acolhimento(self):
         import app
 
         with tempfile.TemporaryDirectory() as tmp:
             app.DB_PATH = os.path.join(tmp, "historico.db")
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
-
-            captured = {}
-
-            def responder_fake(*args, **kwargs):
-                captured["triagem"] = kwargs.get("triagem")
-                return "acolhimento gerado pela LLM"
 
             def fail_if_called(*args, **kwargs):
                 raise AssertionError("detector legado ou triagem LLM nao deve decidir este caso local")
@@ -167,7 +161,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                 patch.object(app, "classificador", None),
                 patch.object(app, "classificar_triagem_llm", side_effect=fail_if_called) as triagem_mock,
                 patch.object(app, "detectar_modo", side_effect=fail_if_called) as modo_mock,
-                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("primeiro acolhimento nao deve depender da LLM")) as responder_mock,
             ):
                 response = app.app.test_client().post(
                     "/chat",
@@ -182,15 +176,14 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                 )
                 triagem_mock.assert_not_called()
                 modo_mock.assert_not_called()
-                responder_mock.assert_called_once()
+                responder_mock.assert_not_called()
 
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["modo"], "real")
-        self.assertEqual(data["resposta"], "acolhimento gerado pela LLM")
-        self.assertEqual(captured["triagem"]["nivel"], "violencia_sem_risco_imediato")
-        self.assertFalse(captured["triagem"]["risco_imediato"])
-        self.assertIn("digital", captured["triagem"]["tipos_violencia"])
+        self.assertIn("redes", data["resposta"].lower())
+        self.assertIn("não é culpa", data["resposta"].lower())
+        self.assertIn("pode ver essa conversa", data["resposta"].lower())
 
     def test_local_triage_routes_control_context_to_real_without_legacy_detector(self):
         import app
