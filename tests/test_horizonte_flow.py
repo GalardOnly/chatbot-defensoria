@@ -1,4 +1,5 @@
 import sys
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +8,26 @@ from unittest.mock import patch
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def _instalar_stubs_conteudo_chat():
+    """Permite importar conteudo_chat em ambiente de teste sem dependencias pesadas."""
+    sys.modules.setdefault("joblib", types.SimpleNamespace(load=lambda *_args, **_kwargs: None))
+    sys.modules.setdefault("numpy", types.SimpleNamespace(argmax=lambda _values: 0))
+    sys.modules.setdefault("requests", types.SimpleNamespace(post=lambda *_args, **_kwargs: None))
+    sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
+
+    google = sys.modules.setdefault("google", types.ModuleType("google"))
+    genai = sys.modules.setdefault("google.genai", types.ModuleType("google.genai"))
+    genai.Client = lambda *_args, **_kwargs: None
+    genai.types = sys.modules.setdefault("google.genai.types", types.ModuleType("google.genai.types"))
+    google.genai = genai
+
+    docx = sys.modules.setdefault("docx", types.ModuleType("docx"))
+    docx.Document = lambda *_args, **_kwargs: None
+
+
+_instalar_stubs_conteudo_chat()
 
 
 class HorizonteFlowTest(unittest.TestCase):
@@ -21,6 +42,9 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("Rua Ernani Martins, 45, Diadema", contatos)
         self.assertIn("https://mulher.policiacivil.ce.gov.br", contatos)
         self.assertIn("https://www.delegaciaeletronica.ce.gov.br/beo/", contatos)
+        self.assertIn("Telefone local da unidade nao confirmado", contatos)
+        self.assertIn("Alo Defensoria 129", contatos)
+        self.assertNotIn("telefone 129", contatos.lower())
         self.assertNotIn("Defensoria Publica do Para", contatos)
         self.assertNotIn("(91) 3181-6181", contatos)
         self.assertNotIn("www.pc.pa.gov.br", contatos)
@@ -81,6 +105,21 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("medida protetiva", resposta.lower())
         self.assertIn("https://mulher.policiacivil.ce.gov.br", resposta)
         self.assertNotIn("Voce esta segura agora para conversar?", resposta)
+
+    def test_fallback_espelha_relato_antes_de_recursos(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "meu marido diz que eu devo ficar presa em casa",
+            modo="real",
+        )
+
+        resposta_lower = resposta.lower()
+        self.assertIn("ficar presa em casa", resposta_lower)
+        self.assertIn("não é culpa", resposta_lower)
+        self.assertIn("conversar com segurança", resposta_lower)
+        self.assertNotIn("CANAIS OFICIAIS", resposta)
+        self.assertNotIn("Rua Juvenal de Castro", resposta)
 
     def test_llm_context_injects_official_links(self):
         import conteudo_chat

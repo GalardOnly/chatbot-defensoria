@@ -51,6 +51,7 @@ direitos_por_situacao = {
 # ── REDE DE PROTEÇÃO — Horizonte/CE (somente fontes oficiais) ────────────────
 # Fonte dos dados:
 # - Defensoria CE: https://www.defensoria.ce.def.br/noticia/defensoria-publica-inaugura-nova-sede-em-horizonte/
+# - Alo Defensoria CE: https://www.defensoria.ce.def.br/informacoes-ao-cidadao/alo-defensoria/
 # - Prefeitura de Horizonte: https://www.horizonte.ce.gov.br/noticia/inaugurada-a-casa-da-mulher-horizontina-cuidado-e-protecao-para-as-mulheres-do-municipio/
 # - Secretaria de Assistência Social: https://www.horizonte.ce.gov.br/secretaria.php?sec=31
 # - PCCE/SSPDS: https://www.policiacivil.ce.gov.br/2023/11/25/dia-internacional-da-nao-violencia-contra-a-mulher-medidas-podem-ser-solicitadas-de-forma-virtual-para-afastar-o-agressor/
@@ -80,13 +81,17 @@ CANAIS_EMERGENCIA = {
     },
 }
 
+ACOLHIMENTO_NIVEL = 4
+
 defensoria_contatos = {
     "Horizonte": {
         "defensoria": {
             "nome": "Defensoria Publica de Horizonte",
             "endereco": "Rua Juvenal de Castro, 477, Centro",
-            "telefone": "129",
-            "horario": "Alô Defensoria 129; atendimento local conforme funcionamento da unidade",
+            "telefone_local": None,
+            "canal_estadual": "Alo Defensoria 129",
+            "canal_estadual_obs": "canal estadual divulgado pela Defensoria Publica do Ceara; nao e telefone local confirmado da unidade de Horizonte",
+            "horario": "atendimento local conforme funcionamento da unidade",
         },
         "casa_mulher": {
             "nome": "Casa da Mulher Horizontina Profa. Nagela Eduardo Alves",
@@ -112,7 +117,7 @@ def formatar_contatos(municipio: str = "Horizonte") -> str:
         f"- Policia Militar: {CANAIS_EMERGENCIA['policia_militar']['telefone']} ({CANAIS_EMERGENCIA['policia_militar']['obs']})",
         f"- Central de Atendimento a Mulher: {CANAIS_EMERGENCIA['central_180']['telefone']} ({CANAIS_EMERGENCIA['central_180']['obs']})",
         "Rede local de acolhimento e orientacao:",
-        f"- {dados['defensoria']['nome']}: {dados['defensoria']['endereco']}; telefone {dados['defensoria']['telefone']}.",
+        f"- {dados['defensoria']['nome']}: {dados['defensoria']['endereco']}. Telefone local da unidade nao confirmado em fonte oficial. {dados['defensoria']['canal_estadual']}: {dados['defensoria']['canal_estadual_obs']}.",
         f"- {dados['casa_mulher']['nome']}: {dados['casa_mulher']['endereco']}; {dados['casa_mulher']['horario']}; telefone {dados['casa_mulher']['telefone']}.",
         f"- {dados['delegacia']['nome']}: telefone {dados['delegacia']['telefone']}; {dados['delegacia']['obs']}.",
         "Servicos digitais oficiais:",
@@ -135,6 +140,70 @@ def detectar_sem_risco_imediato_texto(texto: str) -> bool:
         "estou em segurança", "estou em seguranca", "não é urgente",
         "nao e urgente", "nao é urgente",
     ]) and not detectar_risco_imediato_texto(t)
+
+
+def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
+    texto = (pergunta or "").lower()
+    sinais = set(triagem.get("sinais_fonar") or [])
+    tipos = set(triagem.get("tipos_violencia") or [])
+
+    if "restricao_liberdade" in sinais:
+        if "presa em casa" in texto:
+            return (
+                "Você contou que ele diz que você deve ficar presa em casa. "
+                "Isso é uma forma séria de controle, e não é culpa sua."
+            )
+        if "trancada" in texto or "trancado" in texto:
+            return (
+                "Você contou que ele tenta te manter trancada ou limitada dentro de casa. "
+                "Isso é uma forma séria de controle, e não é culpa sua."
+            )
+        return (
+            "Você descreveu que ele tenta limitar sua liberdade. "
+            "Isso é sério, e não é culpa sua."
+        )
+
+    if "digital" in tipos:
+        return (
+            "Você contou que ele te expõe nas redes sem seu consentimento. "
+            "Isso fere sua privacidade e não é culpa sua."
+        )
+
+    if "fisica" in tipos:
+        return (
+            "Você contou que ele te agride. Nenhuma agressão é aceitável, "
+            "e você não tem culpa pelo que ele fez."
+        )
+
+    if "ameaca_carcere" in sinais:
+        return (
+            "Você contou que ele usa ameaças para tentar te controlar. "
+            "Isso é sério, e não é culpa sua."
+        )
+
+    if "psicologica" in tipos:
+        return (
+            "Você descreveu uma situação de controle, ameaça ou humilhação. "
+            "Isso importa, e você não precisa passar por isso sozinha."
+        )
+
+    return (
+        "Sinto muito que você esteja passando por isso. "
+        "O que você descreveu é sério, e não é culpa sua."
+    )
+
+
+def _pergunta_segura_contextual(triagem: dict) -> str:
+    sinais = set(triagem.get("sinais_fonar") or [])
+    tipos = set(triagem.get("tipos_violencia") or [])
+
+    if "restricao_liberdade" in sinais:
+        return "Você consegue conversar com segurança agora, sem ele ver esta conversa?"
+    if "digital" in tipos:
+        return "Ele está por perto ou pode ver essa conversa agora?"
+    if "fisica" in tipos:
+        return "Você está em um lugar seguro neste momento?"
+    return "Você está segura agora para conversar?"
 
 
 # ── PROTEÇÃO CONTRA PROMPT INJECTION ────────────────────────────────────────
@@ -1179,14 +1248,14 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
                 )
             elif "restricao_liberdade" in set(triagem.get("sinais_fonar") or []):
                 complemento = (
-                    "\n\nImpedir você de sair, ver outras pessoas, usar o celular ou circular livremente "
-                    "é uma forma séria de controle. Se estiver segura agora, posso te explicar os caminhos: "
-                    "Defensoria, BO eletrônico e medida protetiva."
+                    "\n\nSe você estiver segura agora, posso te explicar seus direitos e os caminhos oficiais "
+                    "com calma, no seu tempo."
                 )
+            espelho = _espelhar_relato_acolhedor(pergunta, triagem)
+            pergunta_seguranca = _pergunta_segura_contextual(triagem)
             return (
-                "Sinto muito que você esteja passando por isso. O que você descreveu é sério, "
-                "e não é culpa sua.\n\n"
-                "Você está segura agora? Ele está perto ou pode ver essa conversa?"
+                f"{espelho}\n\n"
+                f"{pergunta_seguranca}"
                 f"{complemento}\n\n"
                 "Se em algum momento houver risco imediato, ligue 190 ou 180."
             )
