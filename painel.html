@@ -149,6 +149,45 @@
     margin-top: 3px;
   }
 
+  .fonar-resumo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 7px;
+  }
+  .fonar-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    background: #edf2f7;
+    color: #334155;
+    border: 1px solid #d9e2ec;
+  }
+  .fonar-chip.risco {
+    background: #ffe7e7;
+    color: #8f1d1d;
+    border-color: #f2b8b8;
+    font-weight: bold;
+  }
+  .fonar-chip.atencao {
+    background: #fff3d6;
+    color: #7a4b00;
+    border-color: #ebc777;
+  }
+  .fonar-chip.tipo {
+    background: #e7f0ff;
+    color: #1b4f8f;
+    border-color: #bfd5f3;
+  }
+  .msg-fonar {
+    max-width: 70%;
+    margin: -2px 0 10px auto;
+    justify-content: flex-end;
+  }
+
   #detalhe-sessao {
     flex: 1;
     padding: 20px;
@@ -327,19 +366,125 @@
     }
   }
 
+  const FONAR_NIVEIS = {
+    risco_extremo: 'FONAR: risco extremo',
+    risco_grave: 'FONAR: risco grave',
+    risco_moderado: 'FONAR: risco moderado',
+    violencia_sem_risco_imediato: 'FONAR: violencia relatada',
+    pedido_orientacao: 'FONAR: pedido de orientacao',
+    ambigua: 'FONAR: alerta inicial',
+    fachada: 'FONAR: fachada'
+  };
+
+  const FONAR_SINAIS = {
+    agressor_presente: 'agressor presente',
+    ameaca_morte: 'ameaca de morte',
+    risco_morte: 'risco de morte',
+    agressao_fisica: 'agressao fisica',
+    filhos_comigo: 'filhos com a usuaria',
+    sem_abrigo: 'sem local seguro',
+    restricao_ou_comunicacao_insegura: 'sem privacidade para falar',
+    restricao_liberdade: 'restricao de liberdade',
+    controle_financeiro: 'controle financeiro',
+    violencia_psicologica: 'violencia psicologica',
+    violencia_patrimonial: 'violencia patrimonial',
+    exposicao_sem_consentimento: 'violencia digital',
+    pedido_denuncia: 'pedido de denuncia'
+  };
+
+  function normalizarLista(valor) {
+    return Array.isArray(valor) ? valor : [];
+  }
+
+  function fonarResumoSessao(info = {}) {
+    const fonar = info.fonar || {};
+    return {
+      nivel_risco: fonar.nivel_risco || info.nivel_risco || 'fachada',
+      risco_imediato: Boolean(fonar.risco_imediato || info.risco_imediato),
+      tipos_violencia_fonar: normalizarLista(fonar.tipos_violencia_fonar || info.tipos_violencia_fonar),
+      sinais_fonar: normalizarLista(fonar.sinais_fonar || info.sinais_fonar)
+    };
+  }
+
+  function fonarTemIndicador(fonar) {
+    return Boolean(
+      fonar.risco_imediato ||
+      (fonar.nivel_risco && fonar.nivel_risco !== 'fachada') ||
+      normalizarLista(fonar.tipos_violencia_fonar).length ||
+      normalizarLista(fonar.sinais_fonar).length
+    );
+  }
+
+  function sessaoEhReal(info) {
+    return info.modo_detectado === 'real' || fonarTemIndicador(fonarResumoSessao(info));
+  }
+
+  function mensagemEhRealFonar(msg) {
+    if (msg.role !== 'user') return false;
+    return fonarTemIndicador({
+      nivel_risco: msg.nivel_risco,
+      risco_imediato: msg.risco_imediato,
+      tipos_violencia_fonar: msg.tipos_violencia_fonar,
+      sinais_fonar: msg.sinais_fonar
+    });
+  }
+
+  function rotuloFonar(valor, mapa = {}) {
+    if (!valor) return '';
+    return mapa[valor] || String(valor).replaceAll('_', ' ');
+  }
+
+  function adicionarChip(container, texto, classe = '') {
+    if (!texto) return;
+    const chip = document.createElement('span');
+    chip.className = `fonar-chip ${classe}`.trim();
+    chip.textContent = texto;
+    container.appendChild(chip);
+  }
+
+  function anexarResumoFonar(parent, fonar) {
+    const resumo = {
+      nivel_risco: fonar?.nivel_risco || 'fachada',
+      risco_imediato: Boolean(fonar?.risco_imediato),
+      tipos_violencia_fonar: normalizarLista(fonar?.tipos_violencia_fonar),
+      sinais_fonar: normalizarLista(fonar?.sinais_fonar)
+    };
+
+    if (!fonarTemIndicador(resumo)) return;
+
+    const box = document.createElement('div');
+    box.className = 'fonar-resumo';
+    if (parent.classList && parent.classList.contains('msg-wrap')) {
+      box.classList.add('msg-fonar');
+    }
+
+    adicionarChip(
+      box,
+      resumo.risco_imediato ? 'FONAR: risco imediato' : rotuloFonar(resumo.nivel_risco, FONAR_NIVEIS),
+      resumo.risco_imediato || ['risco_grave', 'risco_extremo'].includes(resumo.nivel_risco) ? 'risco' : 'atencao'
+    );
+
+    resumo.tipos_violencia_fonar.slice(0, 3).forEach(tipo => {
+      adicionarChip(box, rotuloFonar(tipo), 'tipo');
+    });
+    resumo.sinais_fonar.slice(0, 4).forEach(sinal => {
+      adicionarChip(box, rotuloFonar(sinal, FONAR_SINAIS), 'atencao');
+    });
+
+    parent.appendChild(box);
+  }
+
   function renderizarSessoes() {
     const container = document.getElementById('sessoes-lista');
     let ids = Object.keys(sessoesConhecidas);
 
-    // Filtrar se necessário
     if (filtroReal) {
-      ids = ids.filter(id => sessoesConhecidas[id].modo_detectado === 'real');
+      ids = ids.filter(id => sessaoEhReal(sessoesConhecidas[id]));
     }
 
-    // Ordenar: alertas primeiro
     ids.sort((a, b) => {
-      const ma = sessoesConhecidas[a].modo_detectado === 'real' ? 0 : 1;
-      const mb = sessoesConhecidas[b].modo_detectado === 'real' ? 0 : 1;
+      const ma = sessaoEhReal(sessoesConhecidas[a]) ? 0 : 1;
+      const mb = sessaoEhReal(sessoesConhecidas[b]) ? 0 : 1;
       return ma - mb;
     });
 
@@ -351,7 +496,7 @@
     container.innerHTML = '';
     ids.forEach(id => {
       const info = sessoesConhecidas[id];
-      const isReal = info.modo_detectado === 'real';
+      const isReal = sessaoEhReal(info);
       const div = document.createElement('div');
       div.className = 'sessao-item ' + (isReal ? 'real' : 'fachada');
 
@@ -377,6 +522,7 @@
 
       div.appendChild(header);
       div.appendChild(meta);
+      anexarResumoFonar(div, fonarResumoSessao(info));
       div.onclick = () => verHistorico(id);
       container.appendChild(div);
     });
@@ -397,19 +543,16 @@
 
       let modoAnterior = 'fachada';
       data.historico.forEach(msg => {
-        // Detectar mudança de modo
-        if (msg.role === 'user') {
-          const modoAtual = detectarModoLocal(msg.mensagem);
-          if (modoAtual === 'real' && modoAnterior === 'fachada') {
-            const sep = document.createElement('div');
-            sep.className = 'separador-modo';
-            sep.textContent = '⚠️ Modo de proteção ativado';
-            container.appendChild(sep);
-            modoAnterior = 'real';
-          }
+        if (mensagemEhRealFonar(msg) && modoAnterior === 'fachada') {
+          const sep = document.createElement('div');
+          sep.className = 'separador-modo';
+          sep.textContent = '⚠️ Modo de proteção ativado';
+          container.appendChild(sep);
+          modoAnterior = 'real';
         }
 
         const wrap = document.createElement('div');
+        wrap.className = 'msg-wrap';
         const bolha = document.createElement('div');
         bolha.className = 'msg-painel ' + msg.role;
         bolha.textContent = msg.mensagem;
@@ -418,6 +561,14 @@
         ts.textContent = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '';
         wrap.appendChild(bolha);
         wrap.appendChild(ts);
+        if (msg.role === 'user') {
+          anexarResumoFonar(wrap, {
+            nivel_risco: msg.nivel_risco,
+            risco_imediato: msg.risco_imediato,
+            tipos_violencia_fonar: msg.tipos_violencia_fonar,
+            sinais_fonar: msg.sinais_fonar
+          });
+        }
         container.appendChild(wrap);
       });
 
@@ -425,14 +576,6 @@
     } catch(e) {
       alert('Erro ao carregar histórico.');
     }
-  }
-
-  function detectarModoLocal(mensagem) {
-    const palavras = ['violencia','medo','ajuda','agressao','marido','ameaca',
-      'delegacia','machucou','bater','controlar','socorro','fugir','protetiva',
-      'presa','trancada','agredida','perigo','ferida','machucada'];
-    const lower = mensagem.toLowerCase();
-    return palavras.some(p => lower.includes(p)) ? 'real' : 'fachada';
   }
 
 </script>

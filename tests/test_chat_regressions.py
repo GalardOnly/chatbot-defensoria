@@ -181,7 +181,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["modo"], "real")
-        self.assertIn("redes", data["resposta"].lower())
+        self.assertIn("privacidade", data["resposta"].lower())
         self.assertIn("não é culpa", data["resposta"].lower())
         self.assertIn("pode ver essa conversa", data["resposta"].lower())
 
@@ -223,25 +223,19 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.DB_PATH = os.path.join(tmp, "historico.db")
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
-
-            triagens = [
-                {
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "ele sempre me diz que eu devo ficar trancada em casa",
+                triagem={
                     "nivel": "violencia_sem_risco_imediato",
                     "risco_imediato": False,
                     "tipos_violencia": ["psicologica"],
                     "sinais_fonar": ["restricao_liberdade"],
                     "acao_resposta": "acolher_e_perguntar_seguranca",
-                    "origem": "llm",
                 },
-                {
-                    "nivel": "ambigua",
-                    "risco_imediato": False,
-                    "tipos_violencia": [],
-                    "sinais_fonar": [],
-                    "acao_resposta": "acolher_e_investigar",
-                    "origem": "llm",
-                },
-            ]
+            )
+
             captured = {}
 
             def fallback_fake(*args, **kwargs):
@@ -251,23 +245,12 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
-                patch.object(app, "classificar_triagem_llm", side_effect=triagens),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("triagem contextual local deve cobrir este caso")),
                 patch.object(app, "detectar_modo", side_effect=AssertionError("old detector should not decide")),
-                patch.object(app, "responder_pergunta", side_effect=["acolhimento", RuntimeError("LLM off")]),
+                patch.object(app, "responder_pergunta", side_effect=RuntimeError("LLM off")),
                 patch.object(app, "resposta_contingencia", side_effect=fallback_fake),
             ):
                 client = app.app.test_client()
-                client.post(
-                    "/chat",
-                    json={
-                        "mensagem": "ele sempre me diz que eu devo ficar trancada em casa",
-                        "session_id": session_id,
-                    },
-                    headers={
-                        "X-Session-Id": session_id,
-                        "X-Session-Token": delete_token,
-                    },
-                )
                 response = client.post(
                     "/chat",
                     json={
@@ -337,6 +320,64 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         triagem_mock.assert_not_called()
         responder_mock.assert_called_once()
 
+    def test_initial_denuncia_request_uses_deterministic_official_channels(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("denuncia inicial deve usar canais oficiais determinísticos")) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "quero denunciar", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                responder_mock.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        resposta = response.get_json()["resposta"].lower()
+        self.assertIn("180", resposta)
+        self.assertIn("boletim de ocorrencia", resposta)
+        self.assertIn("medida protetiva", resposta)
+
+    def test_initial_shelter_request_uses_deterministic_local_network(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("pedido de abrigo deve usar fallback oficial")) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "nao tenho para onde ir", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                responder_mock.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        resposta = response.get_json()["resposta"].lower()
+        self.assertIn("casa da mulher", resposta)
+        self.assertIn("defensoria", resposta)
+        self.assertIn("180", resposta)
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 
@@ -361,6 +402,39 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             ),
             [],
         )
+
+    def test_admin_sessions_use_fonar_summary_even_without_legacy_classifier(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, _ = app.registrar_sessao()
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "ele esta aqui",
+                triagem={
+                    "nivel": "risco_grave",
+                    "risco_imediato": True,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": ["agressor_presente"],
+                    "acao_resposta": "risco_imediato",
+                },
+            )
+
+            response = app.app.test_client().get(
+                "/sessoes",
+                headers={"Authorization": f"Bearer {app.ADMIN_TOKEN}"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        sessao = response.get_json()["sessoes"][session_id]
+        self.assertEqual(sessao["modo_detectado"], "real")
+        self.assertEqual(sessao["fonar"]["nivel_risco"], "risco_grave")
+        self.assertTrue(sessao["fonar"]["risco_imediato"])
+        self.assertIn("psicologica", sessao["fonar"]["tipos_violencia_fonar"])
+        self.assertIn("agressor_presente", sessao["fonar"]["sinais_fonar"])
 
 
 class GroqTimeoutRegressionsTest(unittest.TestCase):

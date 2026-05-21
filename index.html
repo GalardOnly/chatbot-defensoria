@@ -119,6 +119,18 @@
     height: 100%;
   }
 
+  #aviso-seguranca {
+    width: min(760px, calc(100% - 28px));
+    margin: 10px auto 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(214, 79, 93, 0.28);
+    border-radius: 10px;
+    background: rgba(185, 59, 73, 0.12);
+    color: #dce6f6;
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
   #mensagens {
     flex: 1;
     min-height: 0;
@@ -383,6 +395,9 @@
   </header>
 
   <div id="chat-container">
+    <div id="aviso-seguranca">
+      Apoio inicial: nao substitui atendimento humano, psicologico, juridico, policial ou medico. Em risco imediato, ligue 190. Quando for seguro, Ligue 180.
+    </div>
     <div id="mensagens"></div>
     <div id="input-area">
       <input
@@ -645,14 +660,6 @@
 
       removerDigitando();
       adicionarBolha(data.resposta || 'Servico temporariamente indisponivel. Tente novamente.', 'assistente');
-
-      if (data.modo === 'real' && modoAtual === 'fachada' && !consentimentoMostrado) {
-        modoAtual = 'real';
-        consentimentoMostrado = true;
-        setTimeout(() => {
-          document.getElementById('modal-consentimento').classList.add('visivel');
-        }, 500);
-      }
 
       if (data.modo === 'real') modoAtual = 'real';
     } catch (e) {

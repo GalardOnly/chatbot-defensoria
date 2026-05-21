@@ -91,6 +91,16 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "o que eu faco", "o que posso fazer", "como proceder",
         "me orienta", "orientacao", "informacoes", "preciso de informacoes",
     ]
+    sem_abrigo = [
+        "nao tenho para onde ir", "nao tenho onde ficar", "sem lugar para ir",
+        "sem lugar para ficar", "estou sem casa", "preciso de abrigo",
+        "preciso de acolhimento", "onde posso ficar", "para onde eu vou",
+    ]
+    filhos_comigo = [
+        "tenho filhos comigo", "meus filhos estao comigo", "minhas filhas estao comigo",
+        "estou com meus filhos", "estou com minhas filhas", "criancas comigo",
+        "meu filho esta comigo", "minha filha esta comigo",
+    ]
     relacao_intima = [
         "marido", "companheiro", "namorado", "ex marido", "ex-marido",
         "meu ex", "meu esposo", "esposo", "ele sempre", "ele me",
@@ -124,6 +134,7 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     ]
     fisicas = [
         "me bate", "me bateu", "me batendo", "me agride", "me agrediu",
+        "fui agredida", "fui agredido", "agredida", "agredido",
         "agressao", "soco", "chute", "empurrou", "tapa", "espancou",
         "enforcou", "estrangulou", "machucou",
     ]
@@ -148,6 +159,7 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     ameaca_morte = [
         "vai me matar", "disse que vai me matar", "ameacou me matar",
         "ameaca de morte", "matar amanha", "matar hoje", "me matar",
+        "medo de morrer", "tenho medo de morrer", "risco de morrer",
     ]
     armas = [
         "arma", "faca", "revolver", "pistola", "espingarda", "facao",
@@ -212,6 +224,11 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("falsa_segura")
     if _tem(t, pedidos_orientacao):
         sinais.append("pedido_orientacao")
+    if _tem(t, sem_abrigo):
+        sinais.append("sem_abrigo")
+        sinais.append("pedido_orientacao")
+    if _tem(t, filhos_comigo):
+        sinais.append("filhos_comigo")
     if _tem(t, relacao_intima) and _tem(t, controle_domestico_ambiguo):
         sinais.append("possivel_controle_domestico")
 
@@ -246,8 +263,12 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     if (
         _tem(t, perigo_declarado)
         or "restricao_ou_comunicacao_insegura" in sinais
+        or (
+            "agressor_presente" in sinais
+            and not _tem(t, ["ele vai chegar", "quando chegar", "quando voltar"])
+        )
         or "falsa_segura" in sinais
-        or ("ameaca_morte" in sinais and _tem(t, futuro_perigoso + agressor_presente))
+        or "ameaca_morte" in sinais
     ):
         return _resultado(
             nivel=NIVEL_GRAVE,
@@ -264,6 +285,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             tipos_violencia=tipos,
             sinais_fonar=sinais,
             acao_resposta="acolher_com_discricao",
+        )
+
+    if "filhos_comigo" in sinais:
+        return _resultado(
+            nivel=NIVEL_MODERADO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="acolher_e_perguntar_seguranca",
         )
 
     if "pedido_orientacao" in sinais:
@@ -337,11 +367,13 @@ def avaliar_emergencia_obvia(texto: str) -> bool:
     ameaca_morte = _tem(t, [
         "vai me matar", "disse que vai me matar", "ameacou me matar",
         "ameaca de morte", "matar amanha", "matar hoje",
+        "tenho medo de morrer", "medo de morrer", "risco de morrer",
     ])
 
     return (
         perigo_declarado
         or comunicacao_insegura
+        or agressor_presente
         or (arma and agressor_presente)
         or ameaca_morte
     )

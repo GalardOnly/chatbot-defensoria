@@ -36,6 +36,12 @@ class FrontendSendFlowTest(unittest.TestCase):
         self.assertIn("sessionStorage.removeItem('chat_session_id')", clear_body)
         self.assertIn("await criarSessaoServidor()", body)
 
+    def test_identification_modal_is_not_shown_automatically_after_real_mode(self):
+        body = _function_body(self.script, "enviar")
+
+        self.assertNotIn("modal-consentimento').classList.add('visivel')", body)
+        self.assertIn("data.modo === 'real'", body)
+
 
 if __name__ == "__main__":
     unittest.main()

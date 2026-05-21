@@ -92,6 +92,12 @@ _FERNET = None          # Fernet | None — inicializado em _inicializar_cripto(
 _CRIPTO_ATIVA = False   # False = modo degradado sem chave
 
 
+def _session_id_seguro(session_id: str = "") -> str:
+    if not session_id:
+        return "?"
+    return f"{session_id[:8]}..."
+
+
 def _inicializar_cripto():
     """
     Deriva a chave Fernet a partir de DB_ENCRYPTION_KEY + salt persistente.
@@ -171,7 +177,7 @@ def decifrar(token, session_id: str = ""):
     except InvalidToken:
         print(
             "[Cripto] WARNING: token invalido ao decifrar "
-            f"session={session_id or '?'}."
+            f"session={_session_id_seguro(session_id)}."
         )
         if _PERMITIR_TEXTO_PLANO_LEGADO:
             print("[Cripto] AVISO: retornando dado legado por configuracao explicita.")
@@ -180,7 +186,7 @@ def decifrar(token, session_id: str = ""):
     except Exception as e:
         print(
             "[Cripto] WARNING: falha inesperada ao decifrar "
-            f"session={session_id or '?'}: {e}"
+            f"session={_session_id_seguro(session_id)}: {e}"
         )
         return ""
 
@@ -321,7 +327,7 @@ def _trace_seguro_chat(trace: dict) -> dict:
     trace = copy.deepcopy(trace)
     session_id = trace.get("session_id")
     if session_id:
-        trace["session_id"] = f"{session_id[:8]}..."
+        trace["session_id"] = _session_id_seguro(session_id)
     return trace
 
 
@@ -633,6 +639,57 @@ def carregar_historico(session_id):
         }
         for row in rows
     ]
+
+
+_PRIORIDADE_NIVEL_FONAR = {
+    "fachada": 0,
+    "ambigua": 1,
+    "pedido_orientacao": 2,
+    "violencia_sem_risco_imediato": 3,
+    "risco_moderado": 4,
+    "risco_grave": 5,
+    "risco_extremo": 6,
+}
+
+
+def _resumo_fonar_historico(historico):
+    nivel_mais_alto = None
+    risco_imediato = False
+    tipos = set()
+    sinais = set()
+
+    for msg in historico or []:
+        if msg.get("role") != "user":
+            continue
+
+        nivel = msg.get("nivel_risco")
+        if nivel and (
+            nivel_mais_alto is None
+            or _PRIORIDADE_NIVEL_FONAR.get(nivel, -1)
+            > _PRIORIDADE_NIVEL_FONAR.get(nivel_mais_alto, -1)
+        ):
+            nivel_mais_alto = nivel
+
+        risco_imediato = risco_imediato or bool(msg.get("risco_imediato"))
+        tipos.update(msg.get("tipos_violencia_fonar") or [])
+        sinais.update(msg.get("sinais_fonar") or [])
+
+    return {
+        "nivel_risco": nivel_mais_alto or "fachada",
+        "risco_imediato": risco_imediato,
+        "tipos_violencia_fonar": sorted(tipos),
+        "sinais_fonar": sorted(sinais),
+    }
+
+
+def _fonar_indica_modo_real(resumo_fonar):
+    nivel = resumo_fonar.get("nivel_risco")
+    return bool(
+        resumo_fonar.get("risco_imediato")
+        or (nivel and nivel != "fachada")
+        or resumo_fonar.get("tipos_violencia_fonar")
+        or resumo_fonar.get("sinais_fonar")
+    )
 
 
 # ── DETECÇÃO DE MODO ─────────────────────────────────────────────────────────
@@ -1058,7 +1115,7 @@ def chat():
     # conversa esperando RAG ficar pronto; o código abaixo já trata serviços None.
     if not _servicos_prontos:
         print(
-            f"[chat] Boot ainda em andamento para session={session_id}. "
+            f"[chat] Boot ainda em andamento para session={_session_id_seguro(session_id)}. "
             "Prosseguindo sem classificador/embeddings."
         )
 
@@ -1156,6 +1213,27 @@ def chat():
         })
 
     # ── Resposta da LLM ───────────────────────────────────────────────────────
+    sinais_triagem = set(triagem.get("sinais_fonar") or [])
+    if (
+        triagem.get("acao_resposta") == "orientar_com_passos"
+        and "pedido_orientacao_com_contexto" not in sinais_triagem
+    ):
+        trace_chat["resposta_origem"] = "fallback_orientacao_inicial"
+        registrar_trace_chat(trace_chat)
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo="real",
+            classificacao=classificacao,
+            triagem=triagem,
+            historico=historico_sessao,
+        )
+        resposta = normalizar_resposta_publica(resposta)
+        salvar_mensagem(session_id, "assistant", resposta)
+        return jsonify({
+            "resposta": resposta,
+            "modo": "real",
+        })
+
     historico_api = [
         {"role": m["role"], "content": m["mensagem"]} for m in historico_sessao
     ]
@@ -1225,10 +1303,12 @@ def sessoes():
     for row in rows:
         sid  = row[0]
         hist = carregar_historico(sid)
+        fonar = _resumo_fonar_historico(hist)
         teve_violencia = any(
             m.get("tipo_violencia") and m["tipo_violencia"] != "nao_violencia"
             for m in hist if m["role"] == "user"
         )
+        teve_fonar = _fonar_indica_modo_real(fonar)
         tipos_detectados = list({
             m["tipo_violencia"] for m in hist
             if m["role"] == "user"
@@ -1237,9 +1317,14 @@ def sessoes():
         })
         resumo[sid] = {
             "total_msgs":       row[1],
-            "modo_detectado":   "real" if teve_violencia else "fachada",
+            "modo_detectado":   "real" if (teve_violencia or teve_fonar) else "fachada",
             "nome":             identificacoes.get(sid),
             "tipos_detectados": tipos_detectados,
+            "fonar":            fonar,
+            "nivel_risco":      fonar["nivel_risco"],
+            "risco_imediato":   fonar["risco_imediato"],
+            "tipos_violencia_fonar": fonar["tipos_violencia_fonar"],
+            "sinais_fonar":     fonar["sinais_fonar"],
             "ultima_msg":       hist[-1]["timestamp"] if hist else None,
         }
     return jsonify({"sessoes": resumo})
@@ -1297,7 +1382,7 @@ def _apagar_sessao(session_id: str):
 
     print(
         f"[AUDIT] {datetime.now(timezone.utc).isoformat()} | "
-        f"SESSÃO APAGADA | session_id={session_id} | ip={request.remote_addr}"
+        f"SESSÃO APAGADA | session_id={_session_id_seguro(session_id)} | ip={request.remote_addr}"
     )
     return jsonify({"status": "apagado"})
 

@@ -143,6 +143,15 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("psicologica", triagem["tipos_violencia"])
         self.assertIn("ameaca_carcere", triagem["sinais_fonar"])
 
+    def test_controle_financeiro_vira_violencia_patrimonial(self):
+        triagem = avaliar_triagem_fonar(
+            "ele controla meu dinheiro e pegou meu cartao"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("patrimonial", triagem["tipos_violencia"])
+
     def test_estado_da_sessao_usa_triagem_fonar_mesmo_sem_classificador_rf(self):
         historico = [
             {
@@ -256,6 +265,23 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertFalse(avaliar_emergencia_obvia("ele sempre me diz que devo ficar trancada em casa"))
         self.assertFalse(avaliar_emergencia_obvia("meu marido nunca abre a janela de casa"))
         self.assertFalse(avaliar_emergencia_obvia("meu marido me expoe nas redes sociais"))
+
+    def test_frases_criticas_da_bateria_recebem_triagem_segura(self):
+        casos = {
+            "ele esta aqui": ("risco_grave", True, "agressor_presente"),
+            "tenho medo de morrer": ("risco_grave", True, "ameaca_morte"),
+            "fui agredida": ("violencia_sem_risco_imediato", False, "agressao_fisica"),
+            "tenho filhos comigo": ("risco_moderado", False, "filhos_comigo"),
+            "nao tenho para onde ir": ("pedido_orientacao", False, "sem_abrigo"),
+        }
+
+        for mensagem, (nivel, risco_imediato, sinal) in casos.items():
+            with self.subTest(mensagem=mensagem):
+                triagem = avaliar_triagem_fonar(mensagem)
+
+                self.assertEqual(triagem["nivel"], nivel)
+                self.assertEqual(triagem["risco_imediato"], risco_imediato)
+                self.assertIn(sinal, triagem["sinais_fonar"])
 
 
 if __name__ == "__main__":

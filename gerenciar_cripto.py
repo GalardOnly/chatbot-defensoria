@@ -13,6 +13,7 @@ Para rotacionar, defina também DB_ENCRYPTION_KEY_NOVA.
 import os
 import sys
 import base64
+import hashlib
 import secrets
 import sqlite3
 from dotenv import load_dotenv
@@ -143,17 +144,18 @@ def cmd_verificar():
     print(f"    Cifrados    : {cifrados}")
     print(f"    Texto plano : {plano}  {'← rode migrar' if plano else '(ok)'}")
 
-    # Teste de decifração com amostra
+    # Teste de decifracao com amostra sem expor conteudo sensivel.
     c.execute("SELECT mensagem FROM historico WHERE mensagem LIKE 'gAAAAA%' LIMIT 3")
     amostras = c.fetchall()
     if amostras:
-        print("\n  Teste de decifração (3 amostras):")
+        print("\n  Teste de decifracao (3 amostras, sem exibir conteudo):")
         for (token,) in amostras:
             texto = _decifrar_seguro(fernet, token)
             if texto is not None:
-                print(f"    OK  → '{texto[:50]}{'...' if len(texto)>50 else ''}'")
+                resumo = hashlib.sha256(texto.encode("utf-8")).hexdigest()[:12]
+                print(f"    OK  -> tamanho={len(texto)} hash={resumo}")
             else:
-                print(f"    FALHA — token não decifrado (chave errada?)")
+                print("    FALHA - token nao decifrado (chave errada?)")
 
     conn.close()
     print()
