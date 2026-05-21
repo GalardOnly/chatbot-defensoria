@@ -378,6 +378,159 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("defensoria", resposta)
         self.assertIn("180", resposta)
 
+    def test_trans_rights_request_uses_inclusive_deterministic_response(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("direitos trans devem ser triagem local deterministica")),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("direitos trans devem usar resposta segura deterministica")) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "por eu ser trans, eu tenho direitos?", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                responder_mock.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["modo"], "real")
+        resposta = data["resposta"].lower()
+        self.assertIn("pessoas trans", resposta)
+        self.assertIn("nome social", resposta)
+        self.assertIn("disque 100", resposta)
+        self.assertNotIn("boletim de ocorrencia", resposta)
+        self.assertNotIn("formulario de medida protetiva", resposta)
+
+    def test_trans_context_is_preserved_when_user_later_asks_about_rights(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("contexto trans deve ser coberto pela triagem local")),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("contexto trans deve usar resposta deterministica")),
+            ):
+                client = app.app.test_client()
+                primeira = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+                segunda = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "queria conversar sobre os meus direitos",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(primeira.status_code, 200)
+        primeira_resposta = primeira.get_json()["resposta"].lower()
+        self.assertIn("mulheres trans", primeira_resposta)
+        self.assertIn("não é culpa", primeira_resposta)
+        self.assertNotIn("boletim de ocorrencia", primeira_resposta)
+
+        self.assertEqual(segunda.status_code, 200)
+        segunda_resposta = segunda.get_json()["resposta"].lower()
+        self.assertIn("mulheres trans", segunda_resposta)
+        self.assertIn("nome social", segunda_resposta)
+        self.assertIn("disque 100", segunda_resposta)
+        self.assertNotIn("boletim de ocorrencia", segunda_resposta)
+        self.assertNotIn("formulario de medida protetiva", segunda_resposta)
+
+    def test_specific_guidance_requests_do_not_use_generic_contact_wall(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("pedidos especificos devem ser triagem local")),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("pedidos especificos devem ter fallback deterministico")),
+            ):
+                client = app.app.test_client()
+                primeira = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "meu marido diz que se eu sair de casa ele vai bater nas minhas criancas",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+                bo = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "como funciona o boletim de ocorrencia eletronico ?",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+                medidas = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "quais as medidas protetivas eu posso ter ?",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+                seguranca = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "e se ele vier atras de mim ?",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+
+        self.assertEqual(primeira.status_code, 200)
+        self.assertEqual(bo.status_code, 200)
+        bo_texto = bo.get_json()["resposta"].lower()
+        self.assertIn("delegacia eletrônica", bo_texto)
+        self.assertIn("protocolo", bo_texto)
+        self.assertNotIn("canais oficiais - horizonte", bo_texto)
+
+        self.assertEqual(medidas.status_code, 200)
+        medidas_texto = medidas.get_json()["resposta"].lower()
+        self.assertIn("afastamento", medidas_texto)
+        self.assertIn("filhos", medidas_texto)
+        self.assertNotIn("canais oficiais - horizonte", medidas_texto)
+
+        self.assertEqual(seguranca.status_code, 200)
+        seguranca_texto = seguranca.get_json()["resposta"].lower()
+        self.assertIn("não confronte", seguranca_texto)
+        self.assertIn("190", seguranca_texto)
+        self.assertNotIn("canais oficiais - horizonte", seguranca_texto)
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 

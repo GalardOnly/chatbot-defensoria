@@ -1214,6 +1214,29 @@ def chat():
 
     # ── Resposta da LLM ───────────────────────────────────────────────────────
     sinais_triagem = set(triagem.get("sinais_fonar") or [])
+    acoes_deterministicas = {
+        "orientar_direitos_lgbtqia",
+        "orientar_bo_online",
+        "orientar_medida_protetiva",
+        "orientar_plano_seguranca",
+    }
+    if triagem.get("acao_resposta") in acoes_deterministicas:
+        trace_chat["resposta_origem"] = f"fallback_{triagem.get('acao_resposta')}"
+        registrar_trace_chat(trace_chat)
+        resposta = resposta_contingencia(
+            pergunta=mensagem,
+            modo="real",
+            classificacao=classificacao,
+            triagem=triagem,
+            historico=historico_sessao,
+        )
+        resposta = normalizar_resposta_publica(resposta)
+        salvar_mensagem(session_id, "assistant", resposta)
+        return jsonify({
+            "resposta": resposta,
+            "modo": "real",
+        })
+
     if (
         triagem.get("acao_resposta") == "orientar_com_passos"
         and "pedido_orientacao_com_contexto" not in sinais_triagem

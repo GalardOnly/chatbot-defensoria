@@ -82,14 +82,48 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     ]
     pedidos_orientacao = [
         "denunciar", "denuncia", "boletim de ocorrencia", "b.o", "bo ",
-        "medida protetiva", "defensoria", "separacao", "divorcio",
+        "medida protetiva", "medidas protetivas", "defensoria", "separacao", "divorcio",
         "guarda dos filhos", "pensao", "processo",
+    ]
+    pedidos_bo_online = [
+        "boletim de ocorrencia eletronico", "boletim eletronico",
+        "bo eletronico", "bo online", "b.o eletronico", "b.o. eletronico",
+        "delegacia eletronica", "como funciona o boletim",
+        "como funciona o bo", "registrar bo online", "fazer bo online",
+    ]
+    pedidos_medida_protetiva = [
+        "medida protetiva", "medidas protetivas", "protetiva",
+        "protetivas", "quais medidas", "que medidas eu posso",
+        "medida de protecao", "medidas de protecao",
+    ]
+    pedidos_plano_seguranca = [
+        "vier atras de mim", "vir atras de mim", "ir atras de mim",
+        "for atras de mim", "vier me procurar", "vir me procurar",
+        "me procurar", "me perseguir", "me seguir", "for na minha casa",
+        "aparecer na minha casa", "ele vier", "ele vir",
     ]
     pedidos_orientacao_contextual = [
         "direitos", "meus direitos", "quais sao meus direitos",
         "quais sao os meus direitos", "posso conversar", "posso falar",
         "o que eu faco", "o que posso fazer", "como proceder",
         "me orienta", "orientacao", "informacoes", "preciso de informacoes",
+    ]
+    identidade_genero_trans = [
+        "sou trans", "ser trans", "pessoa trans", "pessoas trans",
+        "mulher trans", "homem trans", "transgenero", "transgênero",
+        "transexual", "travesti", "nome social", "lgbt", "lgbtqia",
+        "identidade de genero", "identidade de gênero",
+    ]
+    direitos_lgbtqia = [
+        "tenho direitos", "meus direitos", "quais sao meus direitos",
+        "quais sao os meus direitos", "nome social", "discriminacao",
+        "discrimina", "preconceito", "transfobia", "lgbtfobia",
+    ]
+    negacao_direitos_genero = [
+        "nao tenho os mesmos direitos", "nao tenho os mesmo direitos",
+        "nao tenho direitos", "sem direitos", "menos direitos",
+        "direitos das mulheres", "nao sou mulher", "nao e mulher",
+        "nao e uma mulher", "nao tenho os direitos das mulheres",
     ]
     sem_abrigo = [
         "nao tenho para onde ir", "nao tenho onde ficar", "sem lugar para ir",
@@ -100,6 +134,10 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "tenho filhos comigo", "meus filhos estao comigo", "minhas filhas estao comigo",
         "estou com meus filhos", "estou com minhas filhas", "criancas comigo",
         "meu filho esta comigo", "minha filha esta comigo",
+    ]
+    termos_filhos = [
+        "filhos", "filhas", "criancas", "crianca", "meu filho", "minha filha",
+        "minhas criancas", "meus filhos", "minhas filhas",
     ]
     relacao_intima = [
         "marido", "companheiro", "namorado", "ex marido", "ex-marido",
@@ -187,6 +225,10 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "amanha", "mais tarde", "quando voltar", "quando chegar",
         "vai me matar", "ameaca", "ameacou", "me procurar",
     ]
+    ameaca_agressao_terceiros = [
+        "vai bater", "vai machucar", "vai agredir", "ameacou bater",
+        "ameacou machucar", "ameaca bater", "ameaca machucar",
+    ]
 
     if _tem(t, digitais):
         tipos.append("digital")
@@ -222,13 +264,44 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("restricao_ou_comunicacao_insegura")
     if _tem(t, seguranca_negada) and _tem(t, futuro_perigoso):
         sinais.append("falsa_segura")
+    if _tem(t, pedidos_bo_online):
+        sinais.append("pedido_bo_online")
+        sinais.append("pedido_orientacao")
+    if _tem(t, pedidos_medida_protetiva):
+        sinais.append("pedido_medida_protetiva")
+        sinais.append("pedido_orientacao")
+    if _tem(t, pedidos_plano_seguranca):
+        sinais.append("perseguicao_ou_retorno_agressor")
+        sinais.append("pedido_orientacao")
     if _tem(t, pedidos_orientacao):
         sinais.append("pedido_orientacao")
+    if _tem(t, identidade_genero_trans):
+        sinais.append("identidade_genero_trans")
+        if _tem(t, direitos_lgbtqia) or _tem(t, negacao_direitos_genero):
+            sinais.append("direitos_lgbtqia")
+        if _tem(t, direitos_lgbtqia):
+            sinais.append("pedido_orientacao")
+    if (
+        _tem(t, identidade_genero_trans)
+        and _tem(t, relacao_intima)
+        and _tem(t, negacao_direitos_genero)
+    ):
+        tipos.append("psicologica")
+        sinais.append("identidade_genero_trans")
+        sinais.append("direitos_lgbtqia")
+        sinais.append("negacao_direitos_por_genero")
+        sinais.append("violencia_psicologica")
     if _tem(t, sem_abrigo):
         sinais.append("sem_abrigo")
         sinais.append("pedido_orientacao")
     if _tem(t, filhos_comigo):
         sinais.append("filhos_comigo")
+    if _tem(t, termos_filhos) and _tem(t, ameaca_agressao_terceiros):
+        tipos.append("fisica")
+        tipos.append("psicologica")
+        sinais.append("filhos_comigo")
+        sinais.append("ameaca_contra_filhos")
+        sinais.append("violencia_psicologica")
     if _tem(t, relacao_intima) and _tem(t, controle_domestico_ambiguo):
         sinais.append("possivel_controle_domestico")
 
@@ -245,9 +318,19 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             and _tem(historico_usuaria, controle_domestico_ambiguo)
         )
     )
+    historico_tem_contexto_trans = bool(historico_usuaria) and (
+        _tem(historico_usuaria, identidade_genero_trans)
+        or _tem(historico_usuaria, direitos_lgbtqia)
+        or _tem(historico_usuaria, negacao_direitos_genero)
+    )
     if _tem(t, pedidos_orientacao_contextual) and historico_tem_abuso_ou_controle:
         sinais.append("pedido_orientacao")
         sinais.append("pedido_orientacao_com_contexto")
+    if _tem(t, pedidos_orientacao_contextual) and historico_tem_contexto_trans:
+        sinais.append("pedido_orientacao")
+        sinais.append("pedido_orientacao_com_contexto")
+        sinais.append("identidade_genero_trans")
+        sinais.append("direitos_lgbtqia")
 
     if "arma" in sinais and (
         "agressor_presente" in sinais or "ameaca_morte" in sinais or _tem(t, perigo_declarado)
@@ -287,6 +370,33 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             acao_resposta="acolher_com_discricao",
         )
 
+    if "pedido_bo_online" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_bo_online",
+        )
+
+    if "pedido_medida_protetiva" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_medida_protetiva",
+        )
+
+    if "perseguicao_ou_retorno_agressor" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_plano_seguranca",
+        )
+
     if "filhos_comigo" in sinais:
         return _resultado(
             nivel=NIVEL_MODERADO,
@@ -294,6 +404,24 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             tipos_violencia=tipos,
             sinais_fonar=sinais,
             acao_resposta="acolher_e_perguntar_seguranca",
+        )
+
+    if "negacao_direitos_por_genero" in sinais:
+        return _resultado(
+            nivel=NIVEL_VIOLENCIA,
+            risco_imediato=False,
+            tipos_violencia=tipos or ["psicologica"],
+            sinais_fonar=sinais,
+            acao_resposta="acolher_e_perguntar_seguranca",
+        )
+
+    if "direitos_lgbtqia" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_direitos_lgbtqia",
         )
 
     if "pedido_orientacao" in sinais:
@@ -406,6 +534,9 @@ def historico_indica_modo_real(historico: list[dict] | None) -> bool:
         "exposicao_sem_consentimento",
         "violencia_sexual",
         "violencia_patrimonial",
+        "identidade_genero_trans",
+        "direitos_lgbtqia",
+        "negacao_direitos_por_genero",
     }
     niveis_reais = {
         NIVEL_ORIENTACAO,

@@ -109,6 +109,32 @@
     font-size: 0.8rem;
     width: 100%;
   }
+  #legenda-fonar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-top: 10px;
+    color: #475569;
+    font-size: 0.68rem;
+    line-height: 1.2;
+  }
+  #legenda-fonar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+  #legenda-fonar .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+    border: 1px solid rgba(0,0,0,0.12);
+  }
+  #legenda-fonar .verde { background: #2e7d32; }
+  #legenda-fonar .amarelo { background: #f9a825; }
+  #legenda-fonar .vermelho { background: #c62828; }
+  #legenda-fonar .lilas { background: #7b1fa2; }
   #sessoes-lista { padding: 8px; flex: 1; }
 
   .sessao-item {
@@ -147,6 +173,48 @@
     font-size: 0.72rem;
     color: #999;
     margin-top: 3px;
+  }
+
+  .escala-fonar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    margin-top: 8px;
+    max-width: 260px;
+  }
+  .escala-fonar span {
+    height: 8px;
+    border-radius: 999px;
+    opacity: 0.28;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .escala-fonar .verde { background: #2e7d32; }
+  .escala-fonar .amarelo { background: #f9a825; }
+  .escala-fonar .vermelho { background: #c62828; }
+  .escala-fonar .lilas { background: #7b1fa2; }
+  .escala-fonar.verde .verde,
+  .escala-fonar.amarelo .amarelo,
+  .escala-fonar.vermelho .vermelho,
+  .escala-fonar.lilas .lilas {
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 3px rgba(0,0,0,0.18);
+  }
+  .escala-label {
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: #4a5568;
+  }
+  .msg-escala {
+    max-width: 70%;
+    margin: -2px 0 8px auto;
+    justify-content: flex-end;
+  }
+  .msg-escala .escala-fonar {
+    margin-left: auto;
+    width: 210px;
+  }
+  .msg-escala .escala-label {
+    text-align: right;
   }
 
   .fonar-resumo {
@@ -279,6 +347,12 @@
       <div id="lista-header">
         <h3>Sessões ativas</h3>
         <button id="btn-atualizar" onclick="carregarSessoes()">↻ Atualizar</button>
+        <div id="legenda-fonar" aria-label="Legenda da escala FONAR">
+          <span><i class="dot verde"></i>Verde: fachada</span>
+          <span><i class="dot amarelo"></i>Amarelo: atenção</span>
+          <span><i class="dot vermelho"></i>Vermelho: risco</span>
+          <span><i class="dot lilas"></i>Lilás: direitos</span>
+        </div>
       </div>
       <div id="sessoes-lista"></div>
     </div>
@@ -389,7 +463,16 @@
     violencia_psicologica: 'violencia psicologica',
     violencia_patrimonial: 'violencia patrimonial',
     exposicao_sem_consentimento: 'violencia digital',
-    pedido_denuncia: 'pedido de denuncia'
+    pedido_denuncia: 'pedido de denuncia',
+    identidade_genero_trans: 'pessoa trans',
+    direitos_lgbtqia: 'direitos LGBTQIA+'
+  };
+
+  const ESCALA_FONAR_LABELS = {
+    verde: 'Verde: sem sinal sensivel',
+    amarelo: 'Amarelo: atencao / acompanhamento',
+    vermelho: 'Vermelho: risco imediato',
+    lilas: 'Lilas: orientacao de direitos / vulnerabilidade'
   };
 
   function normalizarLista(valor) {
@@ -427,6 +510,51 @@
       tipos_violencia_fonar: msg.tipos_violencia_fonar,
       sinais_fonar: msg.sinais_fonar
     });
+  }
+
+  function escalaFonar(fonar) {
+    const resumo = {
+      nivel_risco: fonar?.nivel_risco || 'fachada',
+      risco_imediato: Boolean(fonar?.risco_imediato),
+      tipos_violencia_fonar: normalizarLista(fonar?.tipos_violencia_fonar),
+      sinais_fonar: normalizarLista(fonar?.sinais_fonar)
+    };
+    const sinais = resumo.sinais_fonar;
+
+    if (resumo.risco_imediato || ['risco_grave', 'risco_extremo'].includes(resumo.nivel_risco)) {
+      return 'vermelho';
+    }
+    if (sinais.includes('direitos_lgbtqia') || sinais.includes('identidade_genero_trans') || resumo.nivel_risco === 'pedido_orientacao') {
+      return 'lilas';
+    }
+    if (['risco_moderado', 'violencia_sem_risco_imediato', 'ambigua'].includes(resumo.nivel_risco) || sinais.length || resumo.tipos_violencia_fonar.length) {
+      return 'amarelo';
+    }
+    return 'verde';
+  }
+
+  function anexarEscalaFonar(parent, fonar) {
+    const cor = escalaFonar(fonar);
+    const wrapper = document.createElement('div');
+    wrapper.className = parent.classList && parent.classList.contains('msg-wrap') ? 'msg-escala' : '';
+
+    const escala = document.createElement('div');
+    escala.className = `escala-fonar ${cor}`;
+    escala.title = ESCALA_FONAR_LABELS[cor];
+    ['verde', 'amarelo', 'vermelho', 'lilas'].forEach(parte => {
+      const segmento = document.createElement('span');
+      segmento.className = parte;
+      segmento.setAttribute('aria-label', ESCALA_FONAR_LABELS[parte]);
+      escala.appendChild(segmento);
+    });
+
+    const label = document.createElement('div');
+    label.className = 'escala-label';
+    label.textContent = ESCALA_FONAR_LABELS[cor];
+
+    wrapper.appendChild(escala);
+    wrapper.appendChild(label);
+    parent.appendChild(wrapper);
   }
 
   function rotuloFonar(valor, mapa = {}) {
@@ -522,6 +650,7 @@
 
       div.appendChild(header);
       div.appendChild(meta);
+      anexarEscalaFonar(div, fonarResumoSessao(info));
       anexarResumoFonar(div, fonarResumoSessao(info));
       div.onclick = () => verHistorico(id);
       container.appendChild(div);
@@ -562,12 +691,14 @@
         wrap.appendChild(bolha);
         wrap.appendChild(ts);
         if (msg.role === 'user') {
-          anexarResumoFonar(wrap, {
+          const fonarMensagem = {
             nivel_risco: msg.nivel_risco,
             risco_imediato: msg.risco_imediato,
             tipos_violencia_fonar: msg.tipos_violencia_fonar,
             sinais_fonar: msg.sinais_fonar
-          });
+          };
+          anexarEscalaFonar(wrap, fonarMensagem);
+          anexarResumoFonar(wrap, fonarMensagem);
         }
         container.appendChild(wrap);
       });

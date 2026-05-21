@@ -81,6 +81,12 @@ CANAIS_EMERGENCIA = {
     },
 }
 
+CANAL_DIREITOS_HUMANOS = {
+    "nome": "Disque Direitos Humanos",
+    "telefone": "100",
+    "obs": "recebe violacoes de direitos humanos, inclusive contra a populacao LGBTQIA+",
+}
+
 ACOLHIMENTO_NIVEL = 4
 
 defensoria_contatos = {
@@ -127,6 +133,71 @@ def formatar_contatos(municipio: str = "Horizonte") -> str:
     return "\n".join(linhas)
 
 
+def resposta_direitos_lgbtqia(pergunta: str = "") -> str:
+    """
+    Orientacao inicial para pessoas trans/travestis sem presumir denuncia.
+
+    Bases publicas usadas para o texto:
+    - STJ, REsp 1.977.124/SP: Lei Maria da Penha aplicavel a mulher trans em violencia domestica/familiar.
+    - CNJ, Resolucao 270/2018: uso do nome social por pessoas trans, travestis e transexuais no Judiciario.
+    - MDHC/Disque 100: canal para violacoes de direitos humanos contra populacao LGBTQIA+.
+    """
+    return (
+        "Sim. Mulheres trans, travestis e pessoas trans têm direitos e devem ser atendidas com respeito, "
+        "sem discriminação e pelo nome social.\n\n"
+        "Você pode buscar orientação na Defensoria Pública sem precisar decidir denunciar agora. "
+        "O Disque 100 também recebe violações de direitos humanos contra a população LGBTQIA+. "
+        "Se você for mulher trans ou travesti e estiver em situação de violência doméstica ou familiar, "
+        "a rede de proteção pode avaliar proteção pela Lei Maria da Penha.\n\n"
+        "Se houver perigo imediato, ligue 190. Se a violência envolver atendimento à mulher, o 180 também pode orientar.\n\n"
+        "Quer que eu te explique primeiro nome social, discriminação/transfobia ou como procurar a Defensoria?"
+    )
+
+
+def resposta_bo_online() -> str:
+    """Explica o BO eletrônico sem transformar a resposta em lista de contatos."""
+    return (
+        "O boletim de ocorrência eletrônico é um registro feito pela Delegacia Eletrônica da Polícia Civil. "
+        "Ele serve para comunicar oficialmente um fato e gerar número de protocolo para acompanhamento.\n\n"
+        "Como costuma funcionar:\n"
+        "1. Acesse https://www.delegaciaeletronica.ce.gov.br/beo/\n"
+        "2. Escolha o tipo de ocorrência que mais combina com o fato.\n"
+        "3. Preencha o relato com data, local aproximado, o que aconteceu e dados que você souber com segurança.\n"
+        "4. Ao finalizar, guarde o número do protocolo e a senha gerados pelo sistema.\n\n"
+        "Se houver risco agora, agressor por perto ou ameaça de morte, não espere o BO: ligue 190. "
+        "Se o sistema não aceitar o caso ou você quiser orientação antes de registrar, a Defensoria pode te orientar com calma."
+    )
+
+
+def resposta_medida_protetiva() -> str:
+    """Orienta sobre tipos de proteção possíveis sem prometer decisão judicial."""
+    return (
+        "Medida protetiva é um pedido de proteção para reduzir o risco e limitar a aproximação ou contato do agressor. "
+        "Quem decide quais medidas serão aplicadas é a autoridade competente, conforme o caso.\n\n"
+        "Em geral, podem ser avaliadas medidas como:\n"
+        "- afastamento do agressor do lar ou do local onde você está;\n"
+        "- proibição de aproximação e de contato por ligação, mensagem ou redes sociais;\n"
+        "- proteção relacionada aos filhos, dependentes e visitas;\n"
+        "- restrição de presença em lugares que aumentem o risco;\n"
+        "- outras medidas necessárias para preservar sua segurança.\n\n"
+        "No Ceará, o pedido online de medida protetiva pode ser feito em https://mulher.policiacivil.ce.gov.br "
+        "com CPF e senha gov.br. Se houver perigo imediato, ligue 190. Não confronte o agressor para tentar conseguir a medida."
+    )
+
+
+def resposta_plano_seguranca() -> str:
+    """Resposta curta para medo de perseguição ou retorno do agressor."""
+    return (
+        "Se você acha que ele pode ir atrás de você, priorize segurança prática agora:\n\n"
+        "- Não confronte e não avise seus próximos passos.\n"
+        "- Se ele estiver vindo, estiver perto ou você se sentir em risco, ligue 190.\n"
+        "- Tente ficar em um lugar seguro, com outras pessoas ou em um serviço público/rede de proteção.\n"
+        "- Se puder, combine uma palavra de alerta com alguém de confiança e mantenha documentos, remédios e celular carregado por perto.\n"
+        "- Se estiver com filhos, leve também documentos e itens essenciais deles quando isso puder ser feito sem aumentar o risco.\n\n"
+        "Quando estiver segura, o 180 e a Defensoria podem orientar os próximos passos sem te pressionar a denunciar."
+    )
+
+
 def detectar_risco_imediato_texto(texto: str) -> bool:
     """Heuristica conservadora para fallback e orientacao de prompt."""
     return bool(avaliar_triagem_fonar(texto).get("risco_imediato"))
@@ -145,6 +216,12 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
     texto = (pergunta or "").lower()
     sinais = set(triagem.get("sinais_fonar") or [])
     tipos = set(triagem.get("tipos_violencia") or [])
+
+    if "identidade_genero_trans" in sinais and "negacao_direitos_por_genero" in sinais:
+        return (
+            "Sinto muito que você esteja ouvindo isso. Mulheres trans têm direitos e devem ser tratadas "
+            "com respeito. Isso não é culpa sua."
+        )
 
     if "restricao_liberdade" in sinais:
         if "presa em casa" in texto:
@@ -986,6 +1063,10 @@ _ACOES_TRIAGEM = {
     "fachada",
     "acolher_e_investigar",
     "orientar_com_passos",
+    "orientar_direitos_lgbtqia",
+    "orientar_bo_online",
+    "orientar_medida_protetiva",
+    "orientar_plano_seguranca",
     "acolher_e_perguntar_seguranca",
     "acolher_com_discricao",
     "emergencia_imediata",
@@ -1082,6 +1163,9 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
                 "e a mensagem atual pede direitos, orientacao, BO, medida protetiva, Defensoria, "
                 "pergunta o que fazer ou diz que pode conversar, classifique como "
                 "pedido_orientacao. Nao volte para ambigua e nao reinicie a conversa.\n\n"
+                "Se a mensagem pede direitos por ser pessoa trans, travesti ou transexual, "
+                "classifique como pedido_orientacao, inclua sinais_fonar identidade_genero_trans "
+                "e direitos_lgbtqia, e use acao_resposta orientar_direitos_lgbtqia.\n\n"
                 "Niveis permitidos: fachada, ambigua, pedido_orientacao, "
                 "violencia_sem_risco_imediato, risco_moderado, risco_grave, risco_extremo.\n"
                 "- fachada: dicas reais de casa/limpeza/organizacao ou saudacao sem sinal sensivel.\n"
@@ -1089,7 +1173,9 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
                 "- violencia_sem_risco_imediato: abuso/violencia declarada sem perigo agora.\n"
                 "- risco_grave/extremo: ameaca de morte, arma, agressor presente, carcere, impossibilidade de falar.\n\n"
                 "Acoes permitidas: fachada, acolher_e_investigar, orientar_com_passos, "
-                "acolher_e_perguntar_seguranca, acolher_com_discricao, emergencia_imediata.\n\n"
+                "orientar_direitos_lgbtqia, orientar_bo_online, orientar_medida_protetiva, "
+                "orientar_plano_seguranca, acolher_e_perguntar_seguranca, "
+                "acolher_com_discricao, emergencia_imediata.\n\n"
                 "Schema obrigatorio:\n"
                 "{\"nivel\":\"...\",\"risco_imediato\":false,"
                 "\"tipos_violencia\":[\"digital|fisica|psicologica|patrimonial|sexual|ameaca\"],"
@@ -1294,6 +1380,15 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
                 "evite confronto e procure alguém de confiança ou um serviço da rede de proteção.\n\n"
                 "O Ligue 180 também pode orientar, de forma gratuita e sigilosa, sobre caminhos de ajuda."
             )
+
+        if triagem.get("acao_resposta") == "orientar_direitos_lgbtqia":
+            return resposta_direitos_lgbtqia(pergunta)
+        if triagem.get("acao_resposta") == "orientar_bo_online":
+            return resposta_bo_online()
+        if triagem.get("acao_resposta") == "orientar_medida_protetiva":
+            return resposta_medida_protetiva()
+        if triagem.get("acao_resposta") == "orientar_plano_seguranca":
+            return resposta_plano_seguranca()
 
         if nivel == "pedido_orientacao":
             if "sem_abrigo" in set(triagem.get("sinais_fonar") or []):

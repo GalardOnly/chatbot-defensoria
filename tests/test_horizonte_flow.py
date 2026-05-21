@@ -188,6 +188,92 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("180", resposta)
         self.assertNotIn("fuja agora", resposta_lower)
 
+    def test_fallback_orienta_direitos_trans_sem_presumir_denuncia(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "por eu ser trans, eu tenho direitos?",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("pessoas trans", resposta_normalizada)
+        self.assertIn("nome social", resposta_normalizada)
+        self.assertIn("disque 100", resposta_normalizada)
+        self.assertIn("defensoria", resposta_normalizada)
+        self.assertIn("190", resposta)
+        self.assertNotIn("boletim de ocorrencia", resposta_normalizada)
+        self.assertNotIn("formulario de medida protetiva", resposta_normalizada)
+
+    def test_fallback_acolhe_mulher_trans_com_marido_sem_burocratizar(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("mulheres trans", resposta_normalizada)
+        self.assertIn("nao e culpa", resposta_normalizada)
+        self.assertIn("segura", resposta_normalizada)
+        self.assertNotIn("boletim de ocorrencia", resposta_normalizada)
+        self.assertNotIn("formulario de medida protetiva", resposta_normalizada)
+
+    def test_fallback_explica_bo_online_sem_parede_de_contatos(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "como funciona o boletim de ocorrencia eletronico ?",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "ele diz que eu devo ficar calada"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("delegacia eletronica", resposta_normalizada)
+        self.assertIn("protocolo", resposta_normalizada)
+        self.assertIn("guarde", resposta_normalizada)
+        self.assertIn("https://www.delegaciaeletronica.ce.gov.br/beo/", resposta)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+        self.assertNotIn("voce quer que eu te explique primeiro o bo", resposta_normalizada)
+
+    def test_fallback_explica_medidas_protetivas_sem_texto_generico(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "quais as medidas protetivas eu posso ter ?",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "meu marido diz que se eu sair de casa ele vai bater nas minhas criancas"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("afastamento", resposta_normalizada)
+        self.assertIn("contato", resposta_normalizada)
+        self.assertIn("filhos", resposta_normalizada)
+        self.assertIn("mulher.policiacivil.ce.gov.br", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+
+    def test_fallback_orienta_se_agressor_vier_atras_sem_confronto(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "e se ele vier atras de mim ?",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "meu marido diz que se eu sair de casa ele vai bater nas minhas criancas"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("nao confronte", resposta_normalizada)
+        self.assertIn("190", resposta)
+        self.assertIn("lugar seguro", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+
     def test_fallback_acolhe_sem_repetir_relato_literal(self):
         import conteudo_chat
 

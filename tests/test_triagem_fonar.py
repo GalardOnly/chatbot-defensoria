@@ -257,6 +257,85 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertEqual(triagem["nivel"], "ambigua")
         self.assertFalse(triagem["risco_imediato"])
 
+    def test_pedido_de_direitos_trans_vira_orientacao_lgbtqia_sem_risco_imediato(self):
+        triagem = avaliar_triagem_fonar("por eu ser trans, eu tenho direitos?")
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("direitos_lgbtqia", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_direitos_lgbtqia")
+
+    def test_relato_de_mulher_trans_com_marido_acolhe_antes_de_orientar(self):
+        triagem = avaliar_triagem_fonar(
+            "por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("direitos_lgbtqia", triagem["sinais_fonar"])
+        self.assertIn("negacao_direitos_por_genero", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+    def test_pedido_de_direitos_usa_contexto_recente_de_mulher_trans(self):
+        historico = [
+            {
+                "role": "user",
+                "content": "por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres",
+            }
+        ]
+
+        triagem = avaliar_triagem_fonar(
+            "queria conversar sobre os meus direitos",
+            historico=historico,
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertFalse(triagem["risco_imediato"])
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("direitos_lgbtqia", triagem["sinais_fonar"])
+        self.assertIn("pedido_orientacao_com_contexto", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_direitos_lgbtqia")
+
+    def test_trans_com_erro_de_digitacao_preserva_intencao_de_direitos(self):
+        historico = []
+        primeira = avaliar_triagem_fonar(
+            "por eu ser trans, meu marido diz que eu nao tenhos os mesmo direitos das mulheres",
+            historico=historico,
+        )
+        historico.append({
+            "role": "user",
+            "content": "por eu ser trans, meu marido diz que eu nao tenhos os mesmo direitos das mulheres",
+        })
+        segunda = avaliar_triagem_fonar("quais sao meus direitos ?", historico=historico)
+
+        self.assertEqual(primeira["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("negacao_direitos_por_genero", primeira["sinais_fonar"])
+        self.assertEqual(primeira["acao_resposta"], "acolher_e_perguntar_seguranca")
+        self.assertEqual(segunda["nivel"], "pedido_orientacao")
+        self.assertIn("identidade_genero_trans", segunda["sinais_fonar"])
+        self.assertEqual(segunda["acao_resposta"], "orientar_direitos_lgbtqia")
+
+    def test_pedidos_especificos_nao_caem_na_orientacao_generica(self):
+        casos = {
+            "como funciona o boletim de ocorrencia eletronico ?": ("orientar_bo_online", "pedido_bo_online"),
+            "quais as medidas protetivas eu posso ter ?": ("orientar_medida_protetiva", "pedido_medida_protetiva"),
+            "e se ele vier atras de mim ?": ("orientar_plano_seguranca", "perseguicao_ou_retorno_agressor"),
+        }
+
+        for mensagem, (acao, sinal) in casos.items():
+            with self.subTest(mensagem=mensagem):
+                triagem = avaliar_triagem_fonar(mensagem, historico=[
+                    {"role": "user", "content": "meu marido diz que se eu sair ele vai bater nas minhas criancas"}
+                ])
+
+                self.assertEqual(triagem["nivel"], "pedido_orientacao")
+                self.assertFalse(triagem["risco_imediato"])
+                self.assertIn(sinal, triagem["sinais_fonar"])
+                self.assertEqual(triagem["acao_resposta"], acao)
+
     def test_emergencia_obvia_local_e_minima(self):
         self.assertTrue(avaliar_emergencia_obvia("ele esta aqui com uma faca"))
         self.assertTrue(avaliar_emergencia_obvia("nao posso falar, ele pode ouvir"))
