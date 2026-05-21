@@ -6,6 +6,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 README = PROJECT_ROOT / "README.md"
 APP = PROJECT_ROOT / "app.py"
 CRYPTO_TOOL = PROJECT_ROOT / "gerenciar_cripto.py"
+TREINAR_MODELO = PROJECT_ROOT / "treinar_modelo.py"
+DATASET_TRANS = PROJECT_ROOT / "dataset_trans.csv"
+RENDER_YAML = PROJECT_ROOT / "render.yaml"
 
 
 class ProjectDocsTest(unittest.TestCase):
@@ -41,6 +44,24 @@ class ProjectDocsTest(unittest.TestCase):
         self.assertIn("_session_id_seguro", texto)
         self.assertNotIn("session_id={session_id}", texto)
         self.assertNotIn("session={session_id or '?'}", texto)
+
+    def test_dataset_trans_is_integrated_into_training_script(self):
+        self.assertTrue(DATASET_TRANS.exists(), "dataset_trans.csv deve estar presente")
+        texto = TREINAR_MODELO.read_text(encoding="utf-8")
+        dataset = DATASET_TRANS.read_text(encoding="utf-8").lower()
+
+        self.assertIn("dataset_trans.csv", texto)
+        self.assertIn("mapa_tipo_trans", texto)
+        self.assertIn('"stalking": "psicologica"', texto)
+        self.assertIn('"grave": "alta"', texto)
+        self.assertIn("nome de registro", dataset)
+        self.assertIn("travesti", dataset)
+
+    def test_render_build_trains_models_from_current_datasets(self):
+        texto = RENDER_YAML.read_text(encoding="utf-8")
+
+        self.assertIn("pip install -r requirements.txt", texto)
+        self.assertIn("python treinar_modelo.py", texto)
 
 
 if __name__ == "__main__":

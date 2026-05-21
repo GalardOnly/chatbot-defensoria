@@ -85,6 +85,16 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "medida protetiva", "medidas protetivas", "defensoria", "separacao", "divorcio",
         "guarda dos filhos", "pensao", "processo",
     ]
+    pedidos_convivencia_filhos = [
+        "direito de ver meus filhos", "direito de ver meu filho",
+        "direito de ver minha filha", "direito de ver minhas filhas",
+        "direito a ver meus filhos", "posso ver meus filhos",
+        "posso ver meu filho", "posso ver minha filha",
+        "posso visitar meus filhos", "visitar meus filhos",
+        "convivencia com meus filhos", "convivencia dos filhos",
+        "guarda dos filhos", "visita aos filhos", "direito de visita",
+        "direito a convivencia", "meus direitos com meus filhos",
+    ]
     pedidos_bo_online = [
         "boletim de ocorrencia eletronico", "boletim eletronico",
         "bo eletronico", "bo online", "b.o eletronico", "b.o. eletronico",
@@ -148,6 +158,19 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "me deixa no escuro", "no escuro", "me prende", "trancada em casa",
         "devo limpar", "tenho que limpar", "limpar a casa sozinha",
         "limpar toda a casa", "homem da casa",
+    ]
+    controle_sobre_filhos = [
+        "nao me deixa ver meus filhos", "nao me deixar ver meus filhos",
+        "nao deixa eu ver meus filhos", "nao deixa ver meus filhos",
+        "nao me deixa ver meu filho", "nao me deixa ver minha filha",
+        "nao me deixa ver minhas filhas", "me impede de ver meus filhos",
+        "impede de ver meus filhos", "impede eu de ver meus filhos",
+        "proibe eu de ver meus filhos", "proibiu eu de ver meus filhos",
+        "proibe ver meus filhos", "afasta meus filhos de mim",
+        "tirou meus filhos de mim", "quer tirar meus filhos de mim",
+        "ameaca tirar meus filhos", "ameacou tirar meus filhos",
+        "usa meus filhos contra mim", "usa as criancas contra mim",
+        "usa as criancas para me controlar",
     ]
     restricao_liberdade = [
         "ficar trancada", "devo ficar trancada", "mandou ficar trancada",
@@ -273,6 +296,12 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     if _tem(t, pedidos_plano_seguranca):
         sinais.append("perseguicao_ou_retorno_agressor")
         sinais.append("pedido_orientacao")
+    if _tem(t, pedidos_convivencia_filhos) or (
+        _tem(t, termos_filhos)
+        and _tem(t, ["direito de ver", "direito a ver", "direito de visita", "posso ver", "posso visitar", "convivencia"])
+    ):
+        sinais.append("pedido_convivencia_filhos")
+        sinais.append("pedido_orientacao")
     if _tem(t, pedidos_orientacao):
         sinais.append("pedido_orientacao")
     if _tem(t, identidade_genero_trans):
@@ -302,6 +331,14 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         sinais.append("filhos_comigo")
         sinais.append("ameaca_contra_filhos")
         sinais.append("violencia_psicologica")
+    if _tem(t, controle_sobre_filhos) or (
+        _tem(t, relacao_intima)
+        and _tem(t, termos_filhos)
+        and _tem(t, ["nao me deixa ver", "nao me deixar ver", "nao deixa eu ver", "me impede de ver", "impede de ver"])
+    ):
+        tipos.append("psicologica")
+        sinais.append("controle_sobre_filhos")
+        sinais.append("violencia_psicologica")
     if _tem(t, relacao_intima) and _tem(t, controle_domestico_ambiguo):
         sinais.append("possivel_controle_domestico")
 
@@ -313,6 +350,7 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         or _tem(historico_usuaria, patrimoniais)
         or _tem(historico_usuaria, ameaca_morte)
         or _tem(historico_usuaria, restricao_liberdade)
+        or _tem(historico_usuaria, controle_sobre_filhos)
         or (
             _tem(historico_usuaria, relacao_intima)
             and _tem(historico_usuaria, controle_domestico_ambiguo)
@@ -325,6 +363,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     )
     if _tem(t, pedidos_orientacao_contextual) and historico_tem_abuso_ou_controle:
         sinais.append("pedido_orientacao")
+        sinais.append("pedido_orientacao_com_contexto")
+    if "pedido_convivencia_filhos" in sinais and historico_tem_abuso_ou_controle:
         sinais.append("pedido_orientacao_com_contexto")
     if _tem(t, pedidos_orientacao_contextual) and historico_tem_contexto_trans:
         sinais.append("pedido_orientacao")
@@ -395,6 +435,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             tipos_violencia=tipos,
             sinais_fonar=sinais,
             acao_resposta="orientar_plano_seguranca",
+        )
+
+    if "pedido_convivencia_filhos" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_convivencia_filhos",
         )
 
     if "filhos_comigo" in sinais:
@@ -537,6 +586,8 @@ def historico_indica_modo_real(historico: list[dict] | None) -> bool:
         "identidade_genero_trans",
         "direitos_lgbtqia",
         "negacao_direitos_por_genero",
+        "controle_sobre_filhos",
+        "pedido_convivencia_filhos",
     }
     niveis_reais = {
         NIVEL_ORIENTACAO,

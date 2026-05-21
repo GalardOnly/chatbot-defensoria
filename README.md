@@ -61,6 +61,19 @@ Para validar rapidamente o fluxo critico, teste as mensagens:
 - `tenho filhos comigo`
 - `quero denunciar`
 - `nao tenho para onde ir`
+- `por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres`
+- `eu possuo direito de ver meus filhos ?`
+
+## Base Documental E Dataset
+
+- `Guia Completo.docx` e a base usada pelo RAG. Depois de alterar esse arquivo, rode o deploy com `ENABLE_RAG_INDEXING=true` ao menos uma vez para reindexar o ChromaDB.
+- `dataset_violencia_2000.csv` e o dataset principal do classificador.
+- `dataset_trans.csv` adiciona exemplos de violencia transfobica dentro das mesmas classes do modelo atual; `treinar_modelo.py` incorpora esse arquivo automaticamente quando ele existir.
+- Para atualizar o modelo local apos mudar datasets:
+
+```powershell
+.\.venv\Scripts\python.exe treinar_modelo.py
+```
 
 ## Controles De Seguranca Da Usuaria
 

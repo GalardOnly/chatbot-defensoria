@@ -145,12 +145,13 @@ def resposta_direitos_lgbtqia(pergunta: str = "") -> str:
     return (
         "Sim. Mulheres trans, travestis e pessoas trans têm direitos e devem ser atendidas com respeito, "
         "sem discriminação e pelo nome social.\n\n"
-        "Você pode buscar orientação na Defensoria Pública sem precisar decidir denunciar agora. "
-        "O Disque 100 também recebe violações de direitos humanos contra a população LGBTQIA+. "
         "Se você for mulher trans ou travesti e estiver em situação de violência doméstica ou familiar, "
-        "a rede de proteção pode avaliar proteção pela Lei Maria da Penha.\n\n"
+        "a rede de proteção pode avaliar proteção pela Lei Maria da Penha. Você também pode pedir respeito ao nome social "
+        "e buscar orientação sobre retificação de registro civil, se isso fizer sentido para você.\n\n"
+        "Você pode buscar orientação na Defensoria Pública sem precisar decidir denunciar agora. "
+        "O Disque 100 também recebe violações de direitos humanos contra a população LGBTQIA+, incluindo LGBTfobia e transfobia.\n\n"
         "Se houver perigo imediato, ligue 190. Se a violência envolver atendimento à mulher, o 180 também pode orientar.\n\n"
-        "Quer que eu te explique primeiro nome social, discriminação/transfobia ou como procurar a Defensoria?"
+        "Quer que eu te explique primeiro nome social, Lei Maria da Penha, LGBTfobia/Disque 100 ou como procurar a Defensoria?"
     )
 
 
@@ -198,6 +199,19 @@ def resposta_plano_seguranca() -> str:
     )
 
 
+def resposta_convivencia_filhos() -> str:
+    """Orienta sobre filhos/convivência sem transformar em parede de contatos."""
+    return (
+        "Entendo. Ser impedida de ver ou falar com seus filhos pode ser muito doloroso e também pode ser uma forma de controle.\n\n"
+        "Em geral, mãe não perde automaticamente o direito de convivência com os filhos porque está buscando ajuda. "
+        "Questões de guarda, visitas/convivência, pensão e proteção das crianças precisam ser avaliadas por atendimento humano, "
+        "especialmente quando há violência doméstica.\n\n"
+        "A Defensoria Pública pode te orientar sobre guarda, convivência, alimentos e medida protetiva envolvendo você e seus filhos. "
+        "Se houver risco imediato para você ou para as crianças, ligue 190. Quando puder falar com segurança, o 180 também orienta.\n\n"
+        "Não confronte o agressor para tentar ver as crianças e não combine encontro se isso puder aumentar o risco."
+    )
+
+
 def detectar_risco_imediato_texto(texto: str) -> bool:
     """Heuristica conservadora para fallback e orientacao de prompt."""
     return bool(avaliar_triagem_fonar(texto).get("risco_imediato"))
@@ -221,6 +235,12 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
         return (
             "Sinto muito que você esteja ouvindo isso. Mulheres trans têm direitos e devem ser tratadas "
             "com respeito. Isso não é culpa sua."
+        )
+
+    if "controle_sobre_filhos" in sinais:
+        return (
+            "Sinto muito que isso esteja acontecendo com você e seus filhos. "
+            "Usar o contato com as crianças para te controlar pode ser muito doloroso, e não é culpa sua."
         )
 
     if "restricao_liberdade" in sinais:
@@ -275,6 +295,8 @@ def _pergunta_segura_contextual(triagem: dict) -> str:
 
     if "restricao_liberdade" in sinais:
         return "Você consegue conversar com segurança agora, sem ele ver esta conversa?"
+    if "controle_sobre_filhos" in sinais:
+        return "Você está segura agora para conversar sobre você e seus filhos?"
     if "digital" in tipos:
         return "Ele está por perto ou pode ver essa conversa agora?"
     if "fisica" in tipos:
@@ -1067,6 +1089,7 @@ _ACOES_TRIAGEM = {
     "orientar_bo_online",
     "orientar_medida_protetiva",
     "orientar_plano_seguranca",
+    "orientar_convivencia_filhos",
     "acolher_e_perguntar_seguranca",
     "acolher_com_discricao",
     "emergencia_imediata",
@@ -1174,7 +1197,7 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
                 "- risco_grave/extremo: ameaca de morte, arma, agressor presente, carcere, impossibilidade de falar.\n\n"
                 "Acoes permitidas: fachada, acolher_e_investigar, orientar_com_passos, "
                 "orientar_direitos_lgbtqia, orientar_bo_online, orientar_medida_protetiva, "
-                "orientar_plano_seguranca, acolher_e_perguntar_seguranca, "
+                "orientar_plano_seguranca, orientar_convivencia_filhos, acolher_e_perguntar_seguranca, "
                 "acolher_com_discricao, emergencia_imediata.\n\n"
                 "Schema obrigatorio:\n"
                 "{\"nivel\":\"...\",\"risco_imediato\":false,"
@@ -1245,6 +1268,12 @@ system_prompt_real = """
 Você é a Manuela, assistente de acolhimento e orientação da rede de proteção de Horizonte/CE.
 Seu papel é ajudar mulheres em situação de violência doméstica ou familiar com linguagem
 extremamente empática, segura, direta e livre de julgamentos.
+
+INCLUSÃO DE MULHERES TRANS:
+Você atende TODAS as mulheres, incluindo mulheres trans, travestis e pessoas trans.
+Mulheres trans têm direito à Lei Maria da Penha, ao nome social, e à proteção contra LGBTfobia.
+Quando identificar que a usuária é trans, mencione explicitamente esses direitos específicos
+além dos direitos gerais da mulher.
 
 REGRA DE FONTES OFICIAIS:
 - Use somente contatos, endereços e links enviados no contexto oficial do sistema.
@@ -1389,6 +1418,8 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
             return resposta_medida_protetiva()
         if triagem.get("acao_resposta") == "orientar_plano_seguranca":
             return resposta_plano_seguranca()
+        if triagem.get("acao_resposta") == "orientar_convivencia_filhos":
+            return resposta_convivencia_filhos()
 
         if nivel == "pedido_orientacao":
             if "sem_abrigo" in set(triagem.get("sinais_fonar") or []):

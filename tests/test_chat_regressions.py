@@ -531,6 +531,51 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("190", seguranca_texto)
         self.assertNotIn("canais oficiais - horizonte", seguranca_texto)
 
+    def test_children_contact_rights_request_does_not_use_generic_contact_wall(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("filhos deve ser triagem local")),
+                patch.object(app, "responder_pergunta", side_effect=AssertionError("direito de ver filhos deve ter fallback deterministico")),
+            ):
+                client = app.app.test_client()
+                primeira = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "meu marido nao me deixar ver meus filhos",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+                segunda = client.post(
+                    "/chat",
+                    json={
+                        "mensagem": "eu possuo direito de ver meus filhos ?",
+                        "session_id": session_id,
+                    },
+                    headers={"X-Session-Id": session_id, "X-Session-Token": delete_token},
+                )
+
+        self.assertEqual(primeira.status_code, 200)
+        primeira_texto = primeira.get_json()["resposta"].lower()
+        self.assertIn("filhos", primeira_texto)
+        self.assertIn("segura", primeira_texto)
+        self.assertNotIn("canais oficiais - horizonte", primeira_texto)
+
+        self.assertEqual(segunda.status_code, 200)
+        segunda_texto = segunda.get_json()["resposta"].lower()
+        self.assertIn("conviv", segunda_texto)
+        self.assertIn("defensoria", segunda_texto)
+        self.assertIn("não confronte", segunda_texto)
+        self.assertNotIn("canais oficiais - horizonte", segunda_texto)
+
     def test_rag_indexing_is_disabled_by_default(self):
         import app
 

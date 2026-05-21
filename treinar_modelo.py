@@ -9,12 +9,54 @@ import joblib
 import hashlib
 import json
 import os
+import sys
 from datetime import datetime, timezone
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 np.random.seed(42)
 
 print("Carregando dataset...")
 df = pd.read_csv('dataset_violencia_2000.csv')
+
+if os.path.exists("dataset_trans.csv"):
+    print("Carregando dataset_trans.csv...")
+    df_trans = pd.read_csv("dataset_trans.csv")
+    colunas_trans = {"texto", "categoria", "severidade"}
+    ausentes_trans = colunas_trans - set(df_trans.columns)
+    if ausentes_trans:
+        raise ValueError(
+            f"Colunas ausentes no dataset_trans.csv: {ausentes_trans}. "
+            f"Encontradas: {list(df_trans.columns)}"
+        )
+
+    mapa_tipo_trans = {
+        "violencia_fisica": "fisica",
+        "violencia_moral": "moral",
+        "violencia_patrimonial": "patrimonial",
+        "violencia_psicologica": "psicologica",
+        "violencia_sexual": "sexual",
+        "stalking": "psicologica",
+    }
+    mapa_gravidade_trans = {
+        "leve": "baixa",
+        "moderada": "media",
+        "grave": "alta",
+    }
+    df_trans = df_trans.rename(columns={"categoria": "tipo", "severidade": "gravidade"})
+    df_trans["tipo"] = df_trans["tipo"].map(mapa_tipo_trans)
+    df_trans["gravidade"] = df_trans["gravidade"].map(mapa_gravidade_trans)
+    invalidas = df_trans[df_trans[["tipo", "gravidade"]].isna().any(axis=1)]
+    if not invalidas.empty:
+        raise ValueError(
+            "dataset_trans.csv contem categoria/severidade sem mapeamento: "
+            f"{invalidas[['texto', 'tipo', 'gravidade']].head().to_dict(orient='records')}"
+        )
+    df = pd.concat([df, df_trans[["texto", "tipo", "gravidade"]]], ignore_index=True)
+    print(f"  Exemplos trans adicionados ao treinamento: {len(df_trans)}")
 
 COLUNAS_OBRIGATORIAS = {"texto", "tipo", "gravidade"}
 ausentes = COLUNAS_OBRIGATORIAS - set(df.columns)

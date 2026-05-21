@@ -66,6 +66,18 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertNotIn("Defensoria Publica do Para", conteudo_chat.system_prompt_real)
         self.assertNotIn("(91) 3181-6181", conteudo_chat.system_prompt_real)
 
+    def test_real_prompt_is_explicitly_trans_inclusive(self):
+        import conteudo_chat
+
+        prompt = _sem_acentos(conteudo_chat.system_prompt_real)
+
+        self.assertIn("todas as mulheres", prompt)
+        self.assertIn("mulheres trans", prompt)
+        self.assertIn("travestis", prompt)
+        self.assertIn("lei maria da penha", prompt)
+        self.assertIn("nome social", prompt)
+        self.assertIn("lgbtfobia", prompt)
+
     def test_real_prompt_proibe_conselhos_perigosos(self):
         import conteudo_chat
 
@@ -273,6 +285,25 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("190", resposta)
         self.assertIn("lugar seguro", resposta_normalizada)
         self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+
+    def test_fallback_orienta_convivencia_com_filhos_sem_parede_de_contatos(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "eu possuo direito de ver meus filhos ?",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "meu marido nao me deixar ver meus filhos"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("filhos", resposta_normalizada)
+        self.assertIn("convivencia", resposta_normalizada)
+        self.assertIn("defensoria", resposta_normalizada)
+        self.assertIn("nao confronte", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+        self.assertNotIn("voce quer que eu te explique primeiro o bo", resposta_normalizada)
 
     def test_fallback_acolhe_sem_repetir_relato_literal(self):
         import conteudo_chat

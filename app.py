@@ -1219,6 +1219,7 @@ def chat():
         "orientar_bo_online",
         "orientar_medida_protetiva",
         "orientar_plano_seguranca",
+        "orientar_convivencia_filhos",
     }
     if triagem.get("acao_resposta") in acoes_deterministicas:
         trace_chat["resposta_origem"] = f"fallback_{triagem.get('acao_resposta')}"

@@ -336,6 +336,26 @@ class TriagemFonarTest(unittest.TestCase):
                 self.assertIn(sinal, triagem["sinais_fonar"])
                 self.assertEqual(triagem["acao_resposta"], acao)
 
+    def test_controle_sobre_filhos_e_pedido_de_convivencia_tem_fluxo_proprio(self):
+        primeira = avaliar_triagem_fonar("meu marido nao me deixar ver meus filhos")
+        historico = [
+            {"role": "user", "content": "meu marido nao me deixar ver meus filhos"}
+        ]
+        segunda = avaliar_triagem_fonar(
+            "eu possuo direito de ver meus filhos ?",
+            historico=historico,
+        )
+
+        self.assertEqual(primeira["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("psicologica", primeira["tipos_violencia"])
+        self.assertIn("controle_sobre_filhos", primeira["sinais_fonar"])
+        self.assertEqual(primeira["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+        self.assertEqual(segunda["nivel"], "pedido_orientacao")
+        self.assertIn("pedido_convivencia_filhos", segunda["sinais_fonar"])
+        self.assertIn("pedido_orientacao_com_contexto", segunda["sinais_fonar"])
+        self.assertEqual(segunda["acao_resposta"], "orientar_convivencia_filhos")
+
     def test_emergencia_obvia_local_e_minima(self):
         self.assertTrue(avaliar_emergencia_obvia("ele esta aqui com uma faca"))
         self.assertTrue(avaliar_emergencia_obvia("nao posso falar, ele pode ouvir"))
