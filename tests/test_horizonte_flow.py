@@ -248,6 +248,70 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
         self.assertNotIn("voce quer que eu te explique primeiro o bo", resposta_normalizada)
 
+    def test_fallback_acolhe_invalidacao_de_genero_com_contexto_trans(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "Ele me diz que nao sou mulher de verdade",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "Meu marido nao me assume na internet por eu ser trans"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("identidade", resposta_normalizada)
+        self.assertIn("pessoas trans", resposta_normalizada)
+        self.assertIn("nao e culpa", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+        self.assertNotIn("voce pode buscar orientacao pela defensoria publica de horizonte", resposta_normalizada)
+
+    def test_fallback_acolhe_invalidacao_de_genero_sem_contexto_trans(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "Ele me diz que nao sou mulher de verdade",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("humilh", resposta_normalizada)
+        self.assertIn("nao e culpa", resposta_normalizada)
+        self.assertIn("segura", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+
+    def test_fallback_explains_law_from_recent_context_without_contact_wall(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "Me sinto segura, queria entender oque a lei fala sobre isso",
+            modo="real",
+            historico=[
+                {"role": "user", "content": "Ele me diz que nao sou mulher de verdade"},
+            ],
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("lei", resposta_normalizada)
+        self.assertIn("violencia psicologica", resposta_normalizada)
+        self.assertIn("defensoria", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+        self.assertNotIn("boletim de ocorrencia eletronico (bo) e formulario", resposta_normalizada)
+
+    def test_fallback_direitos_perante_filhos_sem_contact_wall(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "Quais sao os meu direitos perante meus filhos ?",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("filhos", resposta_normalizada)
+        self.assertIn("convivencia", resposta_normalizada)
+        self.assertIn("guarda", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+
     def test_fallback_explica_bo_online_sem_parede_de_contatos(self):
         import conteudo_chat
 

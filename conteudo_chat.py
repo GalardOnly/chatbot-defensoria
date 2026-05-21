@@ -212,6 +212,46 @@ def resposta_convivencia_filhos() -> str:
     )
 
 
+def resposta_direitos_contextuais(pergunta: str = "", triagem: dict | None = None, historico: list[dict] | None = None) -> str:
+    """Explica direitos a partir do contexto recente, sem cair na lista generica de contatos."""
+    triagem = triagem or {}
+    sinais = set(triagem.get("sinais_fonar") or [])
+    historico = historico or []
+    texto_contexto = " ".join(
+        str(msg.get("content") or msg.get("mensagem") or "")
+        for msg in historico[-6:]
+        if msg.get("role") == "user"
+    ).lower()
+
+    contexto_trans = bool(
+        sinais & {"identidade_genero_trans", "direitos_lgbtqia", "violencia_psicologica_transfobica"}
+    ) or any(
+        termo in texto_contexto
+        for termo in ["trans", "travesti", "nome social", "mulher de verdade", "homem de verdade", "nome antigo"]
+    )
+
+    if contexto_trans:
+        return (
+            "Entendi. Se você está segura agora, posso te explicar com calma.\n\n"
+            "Pela lei, humilhação, controle e discriminação ligados à identidade de gênero podem ser formas de violência psicológica "
+            "e violação de direitos. Pessoas trans têm direito ao nome social, ao respeito à identidade de gênero e à proteção contra "
+            "LGBTfobia/transfobia.\n\n"
+            "Mulheres trans e travestis em situação de violência doméstica ou familiar podem ter proteção avaliada pela Lei Maria da Penha. "
+            "A Defensoria pode te orientar sem exigir que você denuncie agora e sem te pressionar a tomar uma decisão imediata.\n\n"
+            "Se em algum momento houver perigo imediato, ligue 190. Se estiver segura, posso te explicar primeiro Lei Maria da Penha, "
+            "nome social ou como pedir orientação na Defensoria."
+        )
+
+    return (
+        "Entendi. Se você está segura agora, posso te explicar sem pressa.\n\n"
+        "A lei reconhece que humilhação, ameaça, controle, isolamento e impedir sua autonomia podem ser formas de violência psicológica "
+        "ou doméstica, dependendo do caso. Isso não é culpa sua.\n\n"
+        "Você pode buscar orientação na Defensoria para entender seus direitos, medidas de proteção e próximos passos sem precisar decidir "
+        "denunciar agora. Se houver risco imediato, ligue 190.\n\n"
+        "Quer que eu te explique primeiro direitos, medida protetiva ou como conversar com a Defensoria?"
+    )
+
+
 def detectar_risco_imediato_texto(texto: str) -> bool:
     """Heuristica conservadora para fallback e orientacao de prompt."""
     return bool(avaliar_triagem_fonar(texto).get("risco_imediato"))
@@ -236,6 +276,12 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
             "Sinto muito que sua identidade esteja sendo usada para te humilhar. "
             "Pessoas trans têm direito ao nome social, respeito e proteção contra discriminação. "
             "Isso não é culpa sua."
+        )
+
+    if "invalidacao_genero" in sinais:
+        return (
+            "Sinto muito que ele esteja tentando te diminuir desse jeito. "
+            "Usar quem você é para humilhar ou controlar você pode ser violência psicológica, e não é culpa sua."
         )
 
     if "identidade_genero_trans" in sinais and "negacao_direitos_por_genero" in sinais:
@@ -1097,6 +1143,7 @@ _ACOES_TRIAGEM = {
     "orientar_medida_protetiva",
     "orientar_plano_seguranca",
     "orientar_convivencia_filhos",
+    "orientar_direitos_contextuais",
     "acolher_e_perguntar_seguranca",
     "acolher_com_discricao",
     "emergencia_imediata",
@@ -1203,7 +1250,7 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
                 "- violencia_sem_risco_imediato: abuso/violencia declarada sem perigo agora.\n"
                 "- risco_grave/extremo: ameaca de morte, arma, agressor presente, carcere, impossibilidade de falar.\n\n"
                 "Acoes permitidas: fachada, acolher_e_investigar, orientar_com_passos, "
-                "orientar_direitos_lgbtqia, orientar_bo_online, orientar_medida_protetiva, "
+                "orientar_direitos_lgbtqia, orientar_direitos_contextuais, orientar_bo_online, orientar_medida_protetiva, "
                 "orientar_plano_seguranca, orientar_convivencia_filhos, acolher_e_perguntar_seguranca, "
                 "acolher_com_discricao, emergencia_imediata.\n\n"
                 "Schema obrigatorio:\n"
@@ -1430,6 +1477,8 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
             return resposta_plano_seguranca()
         if triagem.get("acao_resposta") == "orientar_convivencia_filhos":
             return resposta_convivencia_filhos()
+        if triagem.get("acao_resposta") == "orientar_direitos_contextuais":
+            return resposta_direitos_contextuais(pergunta, triagem=triagem, historico=historico)
 
         if nivel == "pedido_orientacao":
             if "sem_abrigo" in set(triagem.get("sinais_fonar") or []):

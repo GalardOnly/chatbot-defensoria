@@ -95,6 +95,11 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "guarda dos filhos", "visita aos filhos", "direito de visita",
         "direito a convivencia", "meus direitos com meus filhos",
     ]
+    marcadores_direitos_filhos = [
+        "direito", "direitos", "meus direitos", "perante",
+        "em relacao", "em relação", "sobre", "guarda", "convivencia",
+        "convivência", "visita", "visitas", "pensao", "pensão",
+    ]
     pedidos_bo_online = [
         "boletim de ocorrencia eletronico", "boletim eletronico",
         "bo eletronico", "bo online", "b.o eletronico", "b.o. eletronico",
@@ -118,6 +123,12 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "o que eu faco", "o que posso fazer", "como proceder",
         "me orienta", "orientacao", "informacoes", "preciso de informacoes",
     ]
+    pedidos_lei_contextual = [
+        "lei fala", "a lei fala", "o que a lei fala", "oque a lei fala",
+        "entender o que a lei", "entender oque a lei", "pela lei",
+        "legalmente", "lei diz", "a lei diz", "o que a lei diz",
+        "meus direitos sobre isso", "direitos sobre isso",
+    ]
     identidade_genero_trans = [
         "sou trans", "ser trans", "pessoa trans", "pessoas trans",
         "mulher trans", "homem trans", "transgenero", "transgênero",
@@ -138,6 +149,19 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "ser trans e doenca", "ser trans é doença",
         "travesti nao e mulher", "travesti não é mulher",
         "minha identidade", "minha transicao", "minha transição",
+    ]
+    invalidacao_genero = [
+        "nao sou mulher de verdade", "não sou mulher de verdade",
+        "nao e mulher de verdade", "não é mulher de verdade",
+        "nao sou homem de verdade", "não sou homem de verdade",
+        "nao e homem de verdade", "não é homem de verdade",
+        "mulher de verdade", "homem de verdade",
+    ]
+    invisibilizacao_identidade = [
+        "nao me assume", "não me assume", "me esconde",
+        "nao reconhece minha identidade", "não reconhece minha identidade",
+        "nao respeita minha identidade", "não respeita minha identidade",
+        "nao respeita meu genero", "não respeita meu gênero",
     ]
     negacao_direitos_genero = [
         "nao tenho os mesmos direitos", "nao tenho os mesmo direitos",
@@ -309,6 +333,9 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
     if _tem(t, pedidos_convivencia_filhos) or (
         _tem(t, termos_filhos)
         and _tem(t, ["direito de ver", "direito a ver", "direito de visita", "posso ver", "posso visitar", "convivencia"])
+    ) or (
+        _tem(t, termos_filhos)
+        and _tem(t, marcadores_direitos_filhos)
     ):
         sinais.append("pedido_convivencia_filhos")
         sinais.append("pedido_orientacao")
@@ -320,11 +347,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             sinais.append("direitos_lgbtqia")
         if _tem(t, direitos_lgbtqia):
             sinais.append("pedido_orientacao")
-        if _tem(t, violencias_transfobicas):
+        if _tem(t, violencias_transfobicas) or _tem(t, invalidacao_genero) or _tem(t, invisibilizacao_identidade):
             tipos.append("psicologica")
             sinais.append("direitos_lgbtqia")
             sinais.append("violencia_psicologica")
             sinais.append("violencia_psicologica_transfobica")
+    if _tem(t, invalidacao_genero):
+        tipos.append("psicologica")
+        sinais.append("invalidacao_genero")
+        sinais.append("violencia_psicologica")
     if (
         _tem(t, identidade_genero_trans)
         and _tem(t, relacao_intima)
@@ -366,6 +397,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         or _tem(historico_usuaria, ameaca_morte)
         or _tem(historico_usuaria, restricao_liberdade)
         or _tem(historico_usuaria, controle_sobre_filhos)
+        or _tem(historico_usuaria, invalidacao_genero)
+        or _tem(historico_usuaria, invisibilizacao_identidade)
         or (
             _tem(historico_usuaria, relacao_intima)
             and _tem(historico_usuaria, controle_domestico_ambiguo)
@@ -375,7 +408,26 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         _tem(historico_usuaria, identidade_genero_trans)
         or _tem(historico_usuaria, direitos_lgbtqia)
         or _tem(historico_usuaria, negacao_direitos_genero)
+        or _tem(historico_usuaria, violencias_transfobicas)
+        or _tem(historico_usuaria, invalidacao_genero)
+        or _tem(historico_usuaria, invisibilizacao_identidade)
     )
+
+    if historico_tem_contexto_trans and (_tem(t, invalidacao_genero) or _tem(t, invisibilizacao_identidade)):
+        tipos.append("psicologica")
+        sinais.append("identidade_genero_trans")
+        sinais.append("direitos_lgbtqia")
+        sinais.append("violencia_psicologica")
+        sinais.append("violencia_psicologica_transfobica")
+
+    if _tem(t, pedidos_lei_contextual) and (historico_tem_abuso_ou_controle or historico_tem_contexto_trans):
+        sinais.append("pedido_orientacao")
+        sinais.append("pedido_orientacao_com_contexto")
+        sinais.append("pedido_lei_contextual")
+        if historico_tem_contexto_trans:
+            sinais.append("identidade_genero_trans")
+            sinais.append("direitos_lgbtqia")
+
     if _tem(t, pedidos_orientacao_contextual) and historico_tem_abuso_ou_controle:
         sinais.append("pedido_orientacao")
         sinais.append("pedido_orientacao_com_contexto")
@@ -459,6 +511,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             tipos_violencia=tipos,
             sinais_fonar=sinais,
             acao_resposta="orientar_convivencia_filhos",
+        )
+
+    if "pedido_lei_contextual" in sinais:
+        return _resultado(
+            nivel=NIVEL_ORIENTACAO,
+            risco_imediato=False,
+            tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="orientar_direitos_contextuais",
         )
 
     if "filhos_comigo" in sinais:
@@ -610,8 +671,11 @@ def historico_indica_modo_real(historico: list[dict] | None) -> bool:
         "identidade_genero_trans",
         "direitos_lgbtqia",
         "negacao_direitos_por_genero",
+        "invalidacao_genero",
+        "violencia_psicologica_transfobica",
         "controle_sobre_filhos",
         "pedido_convivencia_filhos",
+        "pedido_lei_contextual",
     }
     niveis_reais = {
         NIVEL_ORIENTACAO,

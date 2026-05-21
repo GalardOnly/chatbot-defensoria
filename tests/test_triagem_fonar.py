@@ -348,6 +348,13 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("pedido_convivencia_filhos", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "orientar_convivencia_filhos")
 
+    def test_direitos_perante_filhos_vira_fluxo_de_convivencia(self):
+        triagem = avaliar_triagem_fonar("Quais sao os meu direitos perante meus filhos ?")
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertIn("pedido_convivencia_filhos", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_convivencia_filhos")
+
     def test_relato_trans_com_nome_antigo_acolhe_como_violencia_psicologica(self):
         triagem = avaliar_triagem_fonar(
             "sou homem trans e meu parceiro usa meu nome antigo para me humilhar"
@@ -358,6 +365,39 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
         self.assertIn("violencia_psicologica_transfobica", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+    def test_invalidacao_de_genero_usa_contexto_trans_recente(self):
+        triagem = avaliar_triagem_fonar(
+            "Ele me diz que nao sou mulher de verdade",
+            historico=[
+                {"role": "user", "content": "Meu marido nao me assume na internet por eu ser trans"},
+            ],
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("violencia_psicologica_transfobica", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+    def test_invalidacao_de_genero_sem_contexto_nao_fica_ambigua(self):
+        triagem = avaliar_triagem_fonar("Ele me diz que nao sou mulher de verdade")
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("invalidacao_genero", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
+    def test_pergunta_sobre_lei_com_contexto_recente_nao_vira_orientacao_generica(self):
+        triagem = avaliar_triagem_fonar(
+            "Me sinto segura, queria entender oque a lei fala sobre isso",
+            historico=[
+                {"role": "user", "content": "Ele me diz que nao sou mulher de verdade"},
+            ],
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertIn("pedido_lei_contextual", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_direitos_contextuais")
 
     def test_controle_sobre_filhos_e_pedido_de_convivencia_tem_fluxo_proprio(self):
         primeira = avaliar_triagem_fonar("meu marido nao me deixar ver meus filhos")
