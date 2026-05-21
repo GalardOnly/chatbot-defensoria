@@ -268,9 +268,9 @@
 
 <div id="painel-screen">
   <header>
-    <h1>🛡️ Painel da Defensoria — Monitoramento de Atendimentos</h1>
+    <h1> Painel da Defensoria — Monitoramento de Atendimentos</h1>
     <div id="header-right">
-      <button id="btn-filtro-real" onclick="toggleFiltro()">⚠️ Só alertas</button>
+      <button id="btn-filtro-real" onclick="toggleFiltro()"> Só alertas</button>
       <button id="btn-logout" onclick="logout()">Sair</button>
     </div>
   </header>
@@ -508,7 +508,7 @@
       if (isReal) {
         const badge = document.createElement('span');
         badge.className = 'badge-alerta';
-        badge.textContent = '⚠️ ALERTA';
+        badge.textContent = ' ALERTA';
         header.appendChild(document.createTextNode(' '));
         header.appendChild(badge);
       }
@@ -546,7 +546,7 @@
         if (mensagemEhRealFonar(msg) && modoAnterior === 'fachada') {
           const sep = document.createElement('div');
           sep.className = 'separador-modo';
-          sep.textContent = '⚠️ Modo de proteção ativado';
+          sep.textContent = ' Modo de proteção ativado';
           container.appendChild(sep);
           modoAnterior = 'real';
         }
