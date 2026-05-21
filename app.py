@@ -953,7 +953,7 @@ def _carregar_servicos_background():
             and os.path.exists("modelos/rf_gravidade.joblib")
             and os.path.exists("modelos/modelos.manifest.json")
         ):
-            print("[boot] Carregando ClassificadorViolencia (TF-IDF + RF, verificação de hash)...")
+            print("[boot] Carregando ClassificadorViolencia (TF-IDF + modelos sklearn, verificação de hash)...")
             try:
                 classificador = ClassificadorViolencia(
                     pasta_modelos="modelos",
@@ -964,7 +964,7 @@ def _carregar_servicos_background():
             except Exception as e:
                 print(f"[boot] ERRO ClassificadorViolencia: {e}")
         else:
-            print("[boot] Modelos RF ou manifesto não encontrados — pré-classificação desativada.")
+            print("[boot] Modelos ou manifesto não encontrados — pré-classificação desativada.")
 
         _servicos_prontos = True
         _boot_event.set()   # libera todas as threads esperando em garantir_servicos()

@@ -1,6 +1,6 @@
 # Chatbot Defensoria - MVP
 
-MVP de chatbot de acolhimento inicial para mulheres em situacao de vulnerabilidade, com fachada visual discreta, triagem de risco, encaminhamento para canais oficiais e cuidados de privacidade.
+MVP de chatbot de acolhimento inicial para mulheres e pessoas trans em situacao de vulnerabilidade, com fachada visual discreta, triagem de risco, encaminhamento para canais oficiais e cuidados de privacidade.
 
 > Aviso importante: este chatbot e apenas apoio inicial. Ele nao substitui atendimento humano, psicologico, juridico, policial ou medico. Em risco imediato, ligue 190. Para orientacao sobre violencia contra a mulher, Ligue 180 quando for seguro.
 
@@ -62,13 +62,14 @@ Para validar rapidamente o fluxo critico, teste as mensagens:
 - `quero denunciar`
 - `nao tenho para onde ir`
 - `por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres`
+- `sou homem trans e meu parceiro usa meu nome antigo para me humilhar`
 - `eu possuo direito de ver meus filhos ?`
 
 ## Base Documental E Dataset
 
 - `Guia Completo.docx` e a base usada pelo RAG. Depois de alterar esse arquivo, rode o deploy com `ENABLE_RAG_INDEXING=true` ao menos uma vez para reindexar o ChromaDB.
-- `dataset_violencia_2000.csv` e o dataset principal do classificador.
-- `dataset_trans.csv` adiciona exemplos de violencia transfobica dentro das mesmas classes do modelo atual; `treinar_modelo.py` incorpora esse arquivo automaticamente quando ele existir.
+- `dataset_unificado.csv` e o dataset principal do classificador. Ele consolida exemplos de violencia contra mulheres, pessoas trans, stalking e mensagens de fachada.
+- O treino usa TF-IDF + regressao logistica One-vs-Rest para tipo de violencia e TF-IDF + Random Forest para gravidade, mantendo limiar conservador para classe `alta`.
 - Para atualizar o modelo local apos mudar datasets:
 
 ```powershell

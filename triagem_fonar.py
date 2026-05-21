@@ -129,6 +129,16 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "quais sao os meus direitos", "nome social", "discriminacao",
         "discrimina", "preconceito", "transfobia", "lgbtfobia",
     ]
+    violencias_transfobicas = [
+        "nome antigo", "nome de registro", "nome morto", "deadname",
+        "nome errado", "me chama pelo nome errado", "me chama pelo nome antigo",
+        "usa meu nome antigo", "usa meu nome de registro",
+        "me trata como homem", "me trata como mulher",
+        "nao e mulher de verdade", "nao e homem de verdade",
+        "ser trans e doenca", "ser trans é doença",
+        "travesti nao e mulher", "travesti não é mulher",
+        "minha identidade", "minha transicao", "minha transição",
+    ]
     negacao_direitos_genero = [
         "nao tenho os mesmos direitos", "nao tenho os mesmo direitos",
         "nao tenho direitos", "sem direitos", "menos direitos",
@@ -310,6 +320,11 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             sinais.append("direitos_lgbtqia")
         if _tem(t, direitos_lgbtqia):
             sinais.append("pedido_orientacao")
+        if _tem(t, violencias_transfobicas):
+            tipos.append("psicologica")
+            sinais.append("direitos_lgbtqia")
+            sinais.append("violencia_psicologica")
+            sinais.append("violencia_psicologica_transfobica")
     if (
         _tem(t, identidade_genero_trans)
         and _tem(t, relacao_intima)
@@ -451,6 +466,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
             nivel=NIVEL_MODERADO,
             risco_imediato=False,
             tipos_violencia=tipos,
+            sinais_fonar=sinais,
+            acao_resposta="acolher_e_perguntar_seguranca",
+        )
+
+    if "violencia_psicologica_transfobica" in sinais:
+        return _resultado(
+            nivel=NIVEL_VIOLENCIA,
+            risco_imediato=False,
+            tipos_violencia=tipos or ["psicologica"],
             sinais_fonar=sinais,
             acao_resposta="acolher_e_perguntar_seguranca",
         )

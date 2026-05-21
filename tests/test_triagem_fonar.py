@@ -336,6 +336,29 @@ class TriagemFonarTest(unittest.TestCase):
                 self.assertIn(sinal, triagem["sinais_fonar"])
                 self.assertEqual(triagem["acao_resposta"], acao)
 
+    def test_pedido_de_convivencia_com_frase_informal_nao_vira_generico(self):
+        triagem = avaliar_triagem_fonar(
+            "eu posso direito de ver meus filhos ?",
+            historico=[
+                {"role": "user", "content": "meu marido nao me deixar ver meus filhos"},
+            ],
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertIn("pedido_convivencia_filhos", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_convivencia_filhos")
+
+    def test_relato_trans_com_nome_antigo_acolhe_como_violencia_psicologica(self):
+        triagem = avaliar_triagem_fonar(
+            "sou homem trans e meu parceiro usa meu nome antigo para me humilhar"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("violencia_psicologica_transfobica", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
     def test_controle_sobre_filhos_e_pedido_de_convivencia_tem_fluxo_proprio(self):
         primeira = avaliar_triagem_fonar("meu marido nao me deixar ver meus filhos")
         historico = [

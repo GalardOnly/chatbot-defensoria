@@ -143,11 +143,11 @@ def resposta_direitos_lgbtqia(pergunta: str = "") -> str:
     - MDHC/Disque 100: canal para violacoes de direitos humanos contra populacao LGBTQIA+.
     """
     return (
-        "Sim. Mulheres trans, travestis e pessoas trans têm direitos e devem ser atendidas com respeito, "
+        "Sim. Pessoas trans, incluindo mulheres trans, travestis e homens trans, têm direitos e devem ser atendidas com respeito, "
         "sem discriminação e pelo nome social.\n\n"
-        "Se você for mulher trans ou travesti e estiver em situação de violência doméstica ou familiar, "
-        "a rede de proteção pode avaliar proteção pela Lei Maria da Penha. Você também pode pedir respeito ao nome social "
-        "e buscar orientação sobre retificação de registro civil, se isso fizer sentido para você.\n\n"
+        "Se você for mulher trans ou travesti e estiver em situação de violência doméstica ou familiar, a rede de proteção pode "
+        "avaliar proteção pela Lei Maria da Penha. Para qualquer pessoa trans, também existem caminhos para pedir respeito ao nome social, "
+        "orientação sobre retificação de registro civil e proteção contra LGBTfobia/transfobia.\n\n"
         "Você pode buscar orientação na Defensoria Pública sem precisar decidir denunciar agora. "
         "O Disque 100 também recebe violações de direitos humanos contra a população LGBTQIA+, incluindo LGBTfobia e transfobia.\n\n"
         "Se houver perigo imediato, ligue 190. Se a violência envolver atendimento à mulher, o 180 também pode orientar.\n\n"
@@ -230,6 +230,13 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
     texto = (pergunta or "").lower()
     sinais = set(triagem.get("sinais_fonar") or [])
     tipos = set(triagem.get("tipos_violencia") or [])
+
+    if "violencia_psicologica_transfobica" in sinais:
+        return (
+            "Sinto muito que sua identidade esteja sendo usada para te humilhar. "
+            "Pessoas trans têm direito ao nome social, respeito e proteção contra discriminação. "
+            "Isso não é culpa sua."
+        )
 
     if "identidade_genero_trans" in sinais and "negacao_direitos_por_genero" in sinais:
         return (
@@ -1269,11 +1276,14 @@ Você é a Manuela, assistente de acolhimento e orientação da rede de proteç�
 Seu papel é ajudar mulheres em situação de violência doméstica ou familiar com linguagem
 extremamente empática, segura, direta e livre de julgamentos.
 
-INCLUSÃO DE MULHERES TRANS:
-Você atende TODAS as mulheres, incluindo mulheres trans, travestis e pessoas trans.
-Mulheres trans têm direito à Lei Maria da Penha, ao nome social, e à proteção contra LGBTfobia.
-Quando identificar que a usuária é trans, mencione explicitamente esses direitos específicos
-além dos direitos gerais da mulher.
+INCLUSÃO DE MULHERES E PESSOAS TRANS:
+Você atende TODAS as mulheres, incluindo mulheres cis, mulheres trans e travestis, e também
+pessoas trans em situação de vulnerabilidade, como homens trans e pessoas não binárias.
+Pessoas trans têm direito ao nome social, respeito à identidade de gênero, orientação da
+Defensoria e proteção contra LGBTfobia/transfobia. Mulheres trans e travestis em violência
+doméstica ou familiar podem ter proteção avaliada pela Lei Maria da Penha.
+Quando identificar que a pessoa atendida é trans, mencione explicitamente esses direitos
+específicos além dos direitos gerais de proteção, sem apagar a identidade dela.
 
 REGRA DE FONTES OFICIAIS:
 - Use somente contatos, endereços e links enviados no contexto oficial do sistema.

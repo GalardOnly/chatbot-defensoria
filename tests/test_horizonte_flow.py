@@ -232,6 +232,22 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertNotIn("boletim de ocorrencia", resposta_normalizada)
         self.assertNotIn("formulario de medida protetiva", resposta_normalizada)
 
+    def test_fallback_acolhe_pessoa_trans_com_nome_antigo_sem_texto_generico(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "sou homem trans e meu parceiro usa meu nome antigo para me humilhar",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("pessoas trans", resposta_normalizada)
+        self.assertIn("nome social", resposta_normalizada)
+        self.assertIn("nao e culpa", resposta_normalizada)
+        self.assertIn("segura", resposta_normalizada)
+        self.assertNotIn("canais oficiais - horizonte", resposta_normalizada)
+        self.assertNotIn("voce quer que eu te explique primeiro o bo", resposta_normalizada)
+
     def test_fallback_explica_bo_online_sem_parede_de_contatos(self):
         import conteudo_chat
 
@@ -290,7 +306,7 @@ class HorizonteFlowTest(unittest.TestCase):
         import conteudo_chat
 
         resposta = conteudo_chat.resposta_contingencia(
-            "eu possuo direito de ver meus filhos ?",
+            "eu posso direito de ver meus filhos ?",
             modo="real",
             historico=[
                 {"role": "user", "content": "meu marido nao me deixar ver meus filhos"},
