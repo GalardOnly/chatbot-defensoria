@@ -937,6 +937,28 @@ def e_desabafo_emocional(mensagem: str) -> bool:
     return any(re.search(padrao, t) for padrao in PADROES_DESABAFO_EMOCIONAL)
 
 
+def e_continuacao_acolhedora(mensagem: str) -> bool:
+    """Detecta follow-up em que a usuaria quer conversar, nao receber orientacao juridica."""
+    t = _normalizar_busca(mensagem)
+    if not t:
+        return False
+
+    pedido_explicito = [
+        "direito", "direitos", "lei", "boletim", "bo ", "medida protetiva",
+        "denunciar", "defensoria", "nome social", "disque", "telefone",
+    ]
+    if any(p in t for p in pedido_explicito):
+        return False
+
+    marcadores_conversa = [
+        "queria conversar", "quero conversar", "apenas conversar",
+        "so conversar", "so queria conversar", "só queria conversar",
+        "queria desabafar", "quero desabafar", "desabafar",
+        "me sentir melhor", "me acalmar", "estou segura",
+    ]
+    return any(p in t for p in marcadores_conversa)
+
+
 def categorizar_chunk_rag(texto: str) -> str:
     """Categoria tematica para permitir RAG filtrado sem separar colecoes."""
     t = _normalizar_busca(texto)
@@ -975,7 +997,11 @@ def classificar_categoria_rag(pergunta: str, triagem: dict | None = None, histor
     sinais = set(triagem.get("sinais_fonar") or [])
     acao = triagem.get("acao_resposta")
 
-    if e_desabafo_emocional(pergunta) or "desabafo_emocional" in sinais:
+    if (
+        e_desabafo_emocional(pergunta)
+        or e_continuacao_acolhedora(pergunta)
+        or "desabafo_emocional" in sinais
+    ):
         return "acolhimento"
 
     if acao == "orientar_direitos_contextuais" or "pedido_lei_contextual" in sinais:
@@ -1371,10 +1397,15 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
                 "Classifique pelo sentido contextual, nao por uma palavra isolada. "
                 "Termos como casa, janela, escuro ou trancada NAO significam fachada se "
                 "aparecem junto de marido, companheiro, controle, medo, isolamento ou abuso.\n\n"
+                "Se a mensagem atual expressa continuidade emocional, seguranca para conversar, "
+                "vontade de desabafar ou de se sentir melhor (ex.: 'estou segura, queria conversar', "
+                "'so queria conversar', 'queria desabafar'), classifique como ambigua e use "
+                "acao_resposta acolher_e_investigar. Nao reative orientacao juridica apenas porque "
+                "o historico tinha sinais de violencia, direitos ou identidade trans.\n\n"
                 "Se o historico recente ja contem abuso, controle, isolamento, medo ou violencia "
-                "e a mensagem atual pede direitos, orientacao, BO, medida protetiva, Defensoria, "
-                "pergunta o que fazer ou diz que pode conversar, classifique como "
-                "pedido_orientacao. Nao volte para ambigua e nao reinicie a conversa.\n\n"
+                "e a mensagem atual pede explicitamente direitos, BO, medida protetiva, Defensoria "
+                "ou pergunta o que fazer, classifique como pedido_orientacao. Nao volte para fachada "
+                "e nao reinicie a conversa.\n\n"
                 "Se a mensagem pede direitos por ser pessoa trans, travesti ou transexual, "
                 "classifique como pedido_orientacao, inclua sinais_fonar identidade_genero_trans "
                 "e direitos_lgbtqia, e use acao_resposta orientar_direitos_lgbtqia.\n\n"
@@ -1815,8 +1846,10 @@ def responder_pergunta(
             f"INTENCAO RAG: {categoria_rag or 'nenhuma'}.\n"
             "Mantenha continuidade com a conversa recente. "
             "Não ignore fatos já mencionados e não repita perguntas já respondidas.\n\n"
-            "Se a usuaria ja relatou abuso/controle e agora pede direitos, BO, medida protetiva, "
-            "Defensoria ou diz que pode conversar, responda a esse pedido com orientacao objetiva. "
+            "Se a usuaria ja relatou abuso/controle e agora pede direitos, BO, medida protetiva "
+            "ou Defensoria, responda a esse pedido com orientacao objetiva. "
+            "Se ela diz que esta segura e quer apenas conversar, desabafar ou se sentir melhor, "
+            "continue o acolhimento humano e nao transforme a resposta em orientacao juridica. "
             "Nao reinicie a conversa perguntando novamente se ela esta segura, a menos que haja novo sinal de risco imediato.\n\n"
             f"DIÁLOGO RECENTE:\n{dialogo_recente or 'Nenhum diálogo recente registrado.'}"
             f"{instrucao_followup}"

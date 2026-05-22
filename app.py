@@ -1214,14 +1214,11 @@ def chat():
 
     # ── Resposta da LLM ───────────────────────────────────────────────────────
     sinais_triagem = set(triagem.get("sinais_fonar") or [])
-    acoes_deterministicas = {
-        "orientar_direitos_lgbtqia",
-        "orientar_bo_online",
-        "orientar_medida_protetiva",
-        "orientar_plano_seguranca",
-        "orientar_convivencia_filhos",
-        "orientar_direitos_contextuais",
-    }
+    # Orientacoes juridicas/procedimentais precisam manter continuidade com o
+    # historico. Elas seguem para a LLM; resposta_contingencia fica como
+    # fallback se a chamada falhar. Respostas fixas ficam reservadas para
+    # saudacao, risco imediato e primeiro acolhimento de seguranca.
+    acoes_deterministicas = set()
     if triagem.get("acao_resposta") in acoes_deterministicas:
         trace_chat["resposta_origem"] = f"fallback_{triagem.get('acao_resposta')}"
         registrar_trace_chat(trace_chat)

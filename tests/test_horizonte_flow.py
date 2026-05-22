@@ -462,6 +462,22 @@ class HorizonteFlowTest(unittest.TestCase):
 
         self.assertEqual(categoria, "acolhimento")
 
+    def test_followup_conversa_segura_uses_acolhimento_even_if_triage_marked_rights(self):
+        import conteudo_chat
+
+        categoria = conteudo_chat.classificar_categoria_rag(
+            "estou segura, queria apenas conversar pra me sentir melhor",
+            triagem={
+                "nivel": "pedido_orientacao",
+                "risco_imediato": False,
+                "tipos_violencia": [],
+                "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                "acao_resposta": "orientar_direitos_lgbtqia",
+            },
+        )
+
+        self.assertEqual(categoria, "acolhimento")
+
     def test_fallback_acolhe_desabafo_trans_sem_contexto_juridico(self):
         import conteudo_chat
 

@@ -320,6 +320,77 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         triagem_mock.assert_not_called()
         responder_mock.assert_called_once()
 
+    def test_safe_emotional_followup_after_trans_relato_uses_llm_conversation(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "meu marido diz que nao sou suficiente por ser mulher trans",
+                triagem={
+                    "nivel": "violencia_sem_risco_imediato",
+                    "risco_imediato": False,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": [
+                        "identidade_genero_trans",
+                        "violencia_psicologica_transfobica",
+                        "desabafo_emocional",
+                    ],
+                    "acao_resposta": "acolher_e_perguntar_seguranca",
+                },
+            )
+            app.salvar_mensagem(
+                session_id,
+                "assistant",
+                "Sinto muito que isso esteja acontecendo. Voce esta segura para conversar?",
+            )
+
+            captured = {}
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                captured["historico"] = kwargs.get("historico")
+                return "Estou aqui com voce. Podemos conversar no seu tempo, sem pressa."
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", return_value={
+                    "nivel": "pedido_orientacao",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                    "acao_resposta": "orientar_direitos_lgbtqia",
+                    "origem": "llm",
+                }),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={
+                        "mensagem": "estou segura, queria apenas conversar pra me sentir melhor",
+                        "session_id": session_id,
+                    },
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["resposta"],
+            "Estou aqui com voce. Podemos conversar no seu tempo, sem pressa.",
+        )
+        responder_mock.assert_called_once()
+        self.assertEqual(captured["triagem"]["acao_resposta"], "orientar_direitos_lgbtqia")
+        historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
+        self.assertIn("mulher trans", historico_texto)
+
     def test_initial_denuncia_request_uses_deterministic_official_channels(self):
         import app
 
@@ -378,7 +449,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertIn("defensoria", resposta)
         self.assertIn("180", resposta)
 
-    def test_trans_rights_request_uses_inclusive_deterministic_response(self):
+    def test_trans_rights_request_uses_inclusive_llm_response(self):
         import app
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -386,11 +457,20 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
 
+            captured = {}
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                return (
+                    "Pessoas trans, incluindo mulheres trans e travestis, tem direito a respeito, "
+                    "nome social e protecao contra LGBTfobia. O Disque 100 tambem pode receber violacoes."
+                )
+
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
                 patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("direitos trans devem ser triagem local deterministica")),
-                patch.object(app, "responder_pergunta", side_effect=AssertionError("direitos trans devem usar resposta segura deterministica")) as responder_mock,
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
                 response = app.app.test_client().post(
                     "/chat",
@@ -400,11 +480,12 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                         "X-Session-Token": delete_token,
                     },
                 )
-                responder_mock.assert_not_called()
 
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["modo"], "real")
+        responder_mock.assert_called_once()
+        self.assertEqual(captured["triagem"]["acao_resposta"], "orientar_direitos_lgbtqia")
         resposta = data["resposta"].lower()
         self.assertIn("pessoas trans", resposta)
         self.assertIn("nome social", resposta)
@@ -420,11 +501,17 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
 
+            def responder_fake(*args, **kwargs):
+                return (
+                    "Mulheres trans tem direitos e devem ser respeitadas. "
+                    "Voce pode pedir orientacao sobre nome social e o Disque 100 recebe LGBTfobia."
+                )
+
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
                 patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("contexto trans deve ser coberto pela triagem local")),
-                patch.object(app, "responder_pergunta", side_effect=AssertionError("contexto trans deve usar resposta deterministica")),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
                 client = app.app.test_client()
                 primeira = client.post(
@@ -457,6 +544,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertNotIn("boletim de ocorrencia", primeira_resposta)
 
         self.assertEqual(segunda.status_code, 200)
+        responder_mock.assert_called_once()
         segunda_resposta = segunda.get_json()["resposta"].lower()
         self.assertIn("mulheres trans", segunda_resposta)
         self.assertIn("nome social", segunda_resposta)
@@ -472,11 +560,21 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
 
+            def responder_fake(*args, **kwargs):
+                pergunta = (kwargs.get("pergunta") or "").lower()
+                if "boletim" in pergunta:
+                    return "O boletim de ocorrencia eletronico pode gerar um protocolo na Delegacia Eletronica, Delegacia Eletrônica."
+                if "medidas protetivas" in pergunta:
+                    return "Medidas protetivas podem incluir afastamento, proibicao de contato e protecao relacionada aos filhos."
+                if "vier atras" in pergunta:
+                    return "Se ele vier atras de voce, nao confronte, não confronte. Priorize um local seguro e ligue 190 se houver risco."
+                return "orientacao contextual"
+
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
                 patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("pedidos especificos devem ser triagem local")),
-                patch.object(app, "responder_pergunta", side_effect=AssertionError("pedidos especificos devem ter fallback deterministico")),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
                 client = app.app.test_client()
                 primeira = client.post(
@@ -513,9 +611,11 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
                 )
 
         self.assertEqual(primeira.status_code, 200)
+        self.assertEqual(responder_mock.call_count, 3)
         self.assertEqual(bo.status_code, 200)
         bo_texto = bo.get_json()["resposta"].lower()
         self.assertIn("delegacia eletrônica", bo_texto)
+        self.assertIn("delegacia eletronica", bo_texto)
         self.assertIn("protocolo", bo_texto)
         self.assertNotIn("canais oficiais - horizonte", bo_texto)
 
@@ -528,6 +628,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertEqual(seguranca.status_code, 200)
         seguranca_texto = seguranca.get_json()["resposta"].lower()
         self.assertIn("não confronte", seguranca_texto)
+        self.assertIn("nao confronte", seguranca_texto)
         self.assertIn("190", seguranca_texto)
         self.assertNotIn("canais oficiais - horizonte", seguranca_texto)
 
@@ -539,11 +640,17 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
             app.init_db()
             session_id, delete_token = app.registrar_sessao()
 
+            def responder_fake(*args, **kwargs):
+                return (
+                    "Voce pode buscar orientacao sobre convivencia com seus filhos na Defensoria. "
+                    "Nao confronte, não confronte se isso puder aumentar o risco."
+                )
+
             with (
                 patch.object(app, "_servicos_prontos", True),
                 patch.object(app, "classificador", None),
                 patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("filhos deve ser triagem local")),
-                patch.object(app, "responder_pergunta", side_effect=AssertionError("direito de ver filhos deve ter fallback deterministico")),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
             ):
                 client = app.app.test_client()
                 primeira = client.post(
@@ -570,6 +677,7 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         self.assertNotIn("canais oficiais - horizonte", primeira_texto)
 
         self.assertEqual(segunda.status_code, 200)
+        responder_mock.assert_called_once()
         segunda_texto = segunda.get_json()["resposta"].lower()
         self.assertIn("conviv", segunda_texto)
         self.assertIn("defensoria", segunda_texto)
