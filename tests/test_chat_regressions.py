@@ -391,6 +391,197 @@ class ChatLatencyRegressionsTest(unittest.TestCase):
         historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
         self.assertIn("mulher trans", historico_texto)
 
+    def test_short_followups_continue_with_llm_not_deterministic_fallback(self):
+        import app
+
+        for mensagem in ["sim", "gostaria", "pode ser"]:
+            with self.subTest(mensagem=mensagem):
+                with tempfile.TemporaryDirectory() as tmp:
+                    app.DB_PATH = os.path.join(tmp, "historico.db")
+                    app.init_db()
+                    session_id, delete_token = app.registrar_sessao()
+                    app.salvar_mensagem(
+                        session_id,
+                        "user",
+                        "por eu ser trans, meu marido diz que eu nao tenho os mesmos direitos das mulheres",
+                        triagem={
+                            "nivel": "violencia_sem_risco_imediato",
+                            "risco_imediato": False,
+                            "tipos_violencia": ["psicologica"],
+                            "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                            "acao_resposta": "acolher_e_perguntar_seguranca",
+                        },
+                    )
+                    app.salvar_mensagem(
+                        session_id,
+                        "assistant",
+                        "Posso te explicar seus direitos com calma, se voce quiser.",
+                    )
+
+                    captured = {}
+
+                    def responder_fake(*args, **kwargs):
+                        captured["historico"] = kwargs.get("historico")
+                        captured["triagem"] = kwargs.get("triagem")
+                        return "Claro. Vou continuar do ponto em que paramos, com calma."
+
+                    with (
+                        patch.object(app, "_servicos_prontos", True),
+                        patch.object(app, "classificador", None),
+                        patch.object(app, "classificar_triagem_llm", return_value={
+                            "nivel": "pedido_orientacao",
+                            "risco_imediato": False,
+                            "tipos_violencia": [],
+                            "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                            "acao_resposta": "orientar_direitos_lgbtqia",
+                            "origem": "llm",
+                        }),
+                        patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+                    ):
+                        response = app.app.test_client().post(
+                            "/chat",
+                            json={"mensagem": mensagem, "session_id": session_id},
+                            headers={
+                                "X-Session-Id": session_id,
+                                "X-Session-Token": delete_token,
+                            },
+                        )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.get_json()["resposta"],
+                    "Claro. Vou continuar do ponto em que paramos, com calma.",
+                )
+                responder_mock.assert_called_once()
+                self.assertEqual(captured["triagem"]["acao_resposta"], "orientar_direitos_lgbtqia")
+                historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
+                self.assertIn("Posso te explicar seus direitos", historico_texto)
+
+    def test_explicit_law_request_uses_llm_not_fixed_channel_text(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "meu marido me humilha todos os dias",
+                triagem={
+                    "nivel": "violencia_sem_risco_imediato",
+                    "risco_imediato": False,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": ["violencia_psicologica"],
+                    "acao_resposta": "acolher_e_perguntar_seguranca",
+                },
+            )
+
+            captured = {}
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                return "A LLM deve explicar as leis aplicaveis com linguagem simples."
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", side_effect=AssertionError("pedido explicito de lei deve ser triagem local")),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "quais leis me protegem?", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["resposta"],
+            "A LLM deve explicar as leis aplicaveis com linguagem simples.",
+        )
+        responder_mock.assert_called_once()
+        self.assertEqual(captured["triagem"]["acao_resposta"], "orientar_direitos_contextuais")
+
+    def test_long_sequence_with_lgbtqia_middle_signal_does_not_rewind_conversation(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app.DB_PATH = os.path.join(tmp, "historico.db")
+            app.init_db()
+            session_id, delete_token = app.registrar_sessao()
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "meu marido diz que nao sou mulher de verdade",
+                triagem={
+                    "nivel": "violencia_sem_risco_imediato",
+                    "risco_imediato": False,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": ["identidade_genero_trans", "violencia_psicologica_transfobica"],
+                    "acao_resposta": "acolher_e_perguntar_seguranca",
+                },
+            )
+            app.salvar_mensagem(session_id, "assistant", "Sinto muito. Voce esta segura para conversar?")
+            app.salvar_mensagem(
+                session_id,
+                "user",
+                "quais direitos eu tenho por ser trans?",
+                triagem={
+                    "nivel": "pedido_orientacao",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                    "acao_resposta": "orientar_direitos_lgbtqia",
+                },
+            )
+            app.salvar_mensagem(session_id, "assistant", "Voce tem direito a respeito e nome social.")
+            app.salvar_mensagem(session_id, "user", "entendi, obrigada")
+            app.salvar_mensagem(session_id, "assistant", "Estou aqui se quiser continuar.")
+
+            captured = {}
+
+            def responder_fake(*args, **kwargs):
+                captured["triagem"] = kwargs.get("triagem")
+                captured["historico"] = kwargs.get("historico")
+                return "Podemos ficar nessa conversa com calma. O que esta pesando mais agora?"
+
+            with (
+                patch.object(app, "_servicos_prontos", True),
+                patch.object(app, "classificador", None),
+                patch.object(app, "classificar_triagem_llm", return_value={
+                    "nivel": "pedido_orientacao",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": ["identidade_genero_trans", "direitos_lgbtqia"],
+                    "acao_resposta": "orientar_direitos_lgbtqia",
+                    "origem": "llm",
+                }),
+                patch.object(app, "responder_pergunta", side_effect=responder_fake) as responder_mock,
+            ):
+                response = app.app.test_client().post(
+                    "/chat",
+                    json={"mensagem": "queria so conversar um pouco", "session_id": session_id},
+                    headers={
+                        "X-Session-Id": session_id,
+                        "X-Session-Token": delete_token,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["resposta"],
+            "Podemos ficar nessa conversa com calma. O que esta pesando mais agora?",
+        )
+        responder_mock.assert_called_once()
+        self.assertEqual(captured["triagem"]["acao_resposta"], "orientar_direitos_lgbtqia")
+        historico_texto = "\n".join(m.get("content", "") for m in captured["historico"])
+        self.assertIn("nome social", historico_texto)
+        self.assertIn("Estou aqui se quiser continuar", historico_texto)
+
     def test_initial_denuncia_request_uses_deterministic_official_channels(self):
         import app
 

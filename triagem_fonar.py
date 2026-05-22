@@ -128,6 +128,8 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "entender o que a lei", "entender oque a lei", "pela lei",
         "legalmente", "lei diz", "a lei diz", "o que a lei diz",
         "meus direitos sobre isso", "direitos sobre isso",
+        "leis me protegem", "lei me protege", "quais leis me protegem",
+        "quais leis protegem", "leis protegem",
     ]
     identidade_genero_trans = [
         "sou trans", "ser trans", "pessoa trans", "pessoas trans",

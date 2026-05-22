@@ -997,6 +997,9 @@ def classificar_categoria_rag(pergunta: str, triagem: dict | None = None, histor
     sinais = set(triagem.get("sinais_fonar") or [])
     acao = triagem.get("acao_resposta")
 
+    # Esta guarda precisa ficar alinhada ao prompt de classificar_triagem_llm:
+    # se a triagem reativar direitos_lgbtqia em um follow-up emocional, o RAG
+    # ainda deve buscar acolhimento para nao despejar legislacao/canais.
     if (
         e_desabafo_emocional(pergunta)
         or e_continuacao_acolhedora(pergunta)

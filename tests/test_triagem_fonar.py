@@ -410,6 +410,18 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("pedido_lei_contextual", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "orientar_direitos_contextuais")
 
+    def test_pedido_explicito_de_leis_com_contexto_vira_orientacao_contextual(self):
+        triagem = avaliar_triagem_fonar(
+            "quais leis me protegem?",
+            historico=[
+                {"role": "user", "content": "meu marido me humilha todos os dias"},
+            ],
+        )
+
+        self.assertEqual(triagem["nivel"], "pedido_orientacao")
+        self.assertIn("pedido_lei_contextual", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "orientar_direitos_contextuais")
+
     def test_controle_sobre_filhos_e_pedido_de_convivencia_tem_fluxo_proprio(self):
         primeira = avaliar_triagem_fonar("meu marido nao me deixar ver meus filhos")
         historico = [
