@@ -4,6 +4,7 @@ import time
 import hashlib
 import hmac
 import json
+import unicodedata
 import joblib
 import numpy as np
 import requests
@@ -888,6 +889,85 @@ class EmbeddingService:
 
 
 # ── FUNÇÕES UTILITÁRIAS ──────────────────────────────────────────────────────
+def _normalizar_busca(texto: str) -> str:
+    texto = unicodedata.normalize("NFD", texto or "")
+    texto = "".join(ch for ch in texto if unicodedata.category(ch) != "Mn")
+    texto = texto.lower()
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def categorizar_chunk_rag(texto: str) -> str:
+    """Categoria tematica para permitir RAG filtrado sem separar colecoes."""
+    t = _normalizar_busca(texto)
+    if any(p in t for p in [
+        "ligue 180", "180", "190", "disque 100", "telefone", "endereco",
+        "canais oficiais", "casa da mulher", "defensoria publica de horizonte",
+        "delegacia metropolitana", "horario", "rua ",
+    ]):
+        return "canais"
+    if any(p in t for p in [
+        "bo eletronico", "boletim de ocorrencia", "delegacia eletronica",
+        "medida protetiva", "formulario", "gov.br", "como pedir",
+        "o que levar", "prazo", "procedimento", "denunciar",
+    ]):
+        return "procedimentos"
+    if any(p in t for p in [
+        "plano de seguranca", "saida rapida", "seguranca digital",
+        "apagar conversa", "nao posso falar", "agressor presente",
+        "risco imediato", "lugar seguro", "acolhimento",
+    ]):
+        return "acolhimento"
+    if any(p in t for p in [
+        "lei", "maria da penha", "decreto", "nome social", "stalking",
+        "violencia psicologica", "transfobia", "lgbtfobia", "ado 26",
+        "retificacao", "registro civil", "direitos",
+    ]):
+        return "legislacao"
+    return "legislacao"
+
+
+def classificar_categoria_rag(pergunta: str, triagem: dict | None = None, historico: list[dict] | None = None) -> str:
+    """Roteador leve para escolher metadado RAG antes da busca vetorial."""
+    triagem = triagem or {}
+    historico = historico or []
+    t = _normalizar_busca(pergunta)
+    sinais = set(triagem.get("sinais_fonar") or [])
+    acao = triagem.get("acao_resposta")
+
+    if acao == "orientar_direitos_contextuais" or "pedido_lei_contextual" in sinais:
+        return "legislacao"
+    if acao in {"orientar_bo_online", "orientar_medida_protetiva"}:
+        return "procedimentos"
+    if acao == "orientar_plano_seguranca" or triagem.get("risco_imediato"):
+        return "acolhimento"
+    if acao == "orientar_convivencia_filhos":
+        return "legislacao"
+
+    if any(p in t for p in ["lei", "direito", "direitos", "nome social", "maria da penha", "transfobia", "stalking"]):
+        return "legislacao"
+    if any(p in t for p in ["telefone", "endereco", "endereço", "onde fica", "horario", "contato", "numero", "número"]):
+        return "canais"
+    if any(p in t for p in ["bo", "boletim", "denunciar", "medida protetiva", "como pedir", "como registrar"]):
+        return "procedimentos"
+    if any(p in t for p in ["risco", "seguranca", "segurança", "fugir", "sair de casa", "nao posso falar"]):
+        return "acolhimento"
+
+    ultima_assistente = ""
+    for msg in reversed(historico):
+        if msg.get("role") == "assistant":
+            ultima_assistente = _normalizar_busca(msg.get("content") or "")
+            break
+    if len(t.split()) <= 3 and ultima_assistente:
+        if any(p in ultima_assistente for p in ["lei", "maria da penha", "nome social", "direitos"]):
+            return "legislacao"
+        if any(p in ultima_assistente for p in ["bo", "medida protetiva", "denunciar"]):
+            return "procedimentos"
+        if any(p in ultima_assistente for p in ["telefone", "180", "190", "endereco"]):
+            return "canais"
+
+    return "legislacao"
+
+
 def chunk_text(text, max_tokens=500):
     """
     Divide texto em chunks com overlap entre chunks consecutivos.
@@ -935,15 +1015,24 @@ def chunk_text(text, max_tokens=500):
 
 def armazenar_chunks_com_embeddings(chunks, embeddings, colecao):
     existentes = colecao.get()["ids"]
-    novos_chunks, novos_embeddings, novos_ids = [], [], []
+    novos_chunks, novos_embeddings, novos_ids, novos_metadados = [], [], [], []
     for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
         id_ = f"chunk_{i}"
         if id_ not in existentes:
             novos_chunks.append(chunk)
             novos_embeddings.append(emb)
             novos_ids.append(id_)
+            novos_metadados.append({
+                "categoria": categorizar_chunk_rag(chunk),
+                "origem": "guia_completo",
+            })
     if novos_ids:
-        colecao.add(documents=novos_chunks, embeddings=novos_embeddings, ids=novos_ids)
+        colecao.add(
+            documents=novos_chunks,
+            embeddings=novos_embeddings,
+            ids=novos_ids,
+            metadatas=novos_metadados,
+        )
         print(f"{len(novos_ids)} chunks novos armazenados.")
     else:
         print("Dados já existem. Nenhum chunk novo inserido.")
@@ -971,6 +1060,7 @@ def _sha256_doc(caminho: str) -> str:
 
 
 _META_DOC_HASH_ID = "__doc_hash__"   # ID sentinela na colecao para armazenar o hash
+_RAG_SCHEMA_VERSION = "rag-v2-categorias"
 
 
 def _hash_atual_na_colecao(colecao):
@@ -991,6 +1081,7 @@ def _salvar_hash_na_colecao(colecao, hash_doc: str) -> None:
             ids=[_META_DOC_HASH_ID],
             documents=[hash_doc],
             embeddings=[[0.0] * 768],
+            metadatas=[{"categoria": "meta", "schema": _RAG_SCHEMA_VERSION}],
         )
     except Exception as e:
         print(f"[RAG] AVISO: nao foi possivel salvar hash sentinela: {e}")
@@ -1017,7 +1108,7 @@ def garantir_base_conhecimento(embedding_service, colecao, caminho_arquivo="Guia
         print(f"[RAG] Documento base nao encontrado: {caminho_arquivo}")
         return
 
-    hash_docx = _sha256_doc(caminho_arquivo)
+    hash_docx = f"{_RAG_SCHEMA_VERSION}:{_sha256_doc(caminho_arquivo)}"
 
     try:
         total = colecao.count()
@@ -1288,7 +1379,7 @@ def classificar_triagem_llm(pergunta, historico=None, session_id: str = "") -> d
 _colecao_populada: bool | None = None
 
 
-def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
+def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3, categoria: str | None = None):
     """
     Busca chunks relevantes no ChromaDB via similaridade de embedding.
 
@@ -1313,7 +1404,10 @@ def buscar_chunks_relevantes(pergunta, embedding_service, colecao, n_results=3):
         return []
 
     embedding = embedding_service.embed([pergunta], task_type="retrieval_query")[0]
-    resultado = colecao.query(query_embeddings=[embedding], n_results=n_results)
+    kwargs = {"query_embeddings": [embedding], "n_results": n_results}
+    if categoria:
+        kwargs["where"] = {"categoria": categoria}
+    resultado = colecao.query(**kwargs)
     return resultado["documents"][0] if "documents" in resultado else []
 
 
@@ -1358,6 +1452,21 @@ Depois oriente com calma, se ela pedir ou disser que está segura.
 
 3. Pedido de orientação: explique caminhos oficiais em passos simples, sem pressionar
 denúncia.
+
+MODOS DE PERGUNTA:
+- Acolhimento: quando a usuária relata dor, medo, humilhação, controle ou violência.
+  Responda primeiro ao sentimento e à segurança. Não abra com lista de canais, salvo risco imediato.
+- Informação jurídica: quando a usuária pergunta "o que a lei fala", "quais são meus direitos",
+  nome social, Lei Maria da Penha, filhos, guarda ou violência psicológica. Explique a regra em
+  linguagem simples e contextual. NÃO despeje listas de canais nem telefones; no máximo mencione
+  que a Defensoria pode orientar, sem transformar a resposta em encaminhamento.
+- Encaminhamento prático: use contatos, endereços, BO, medida protetiva e serviços apenas quando
+  a usuária pedir canal, denúncia, BO, medida protetiva, endereço, telefone, abrigo ou houver risco imediato.
+
+CONTINUIDADE:
+- Se a mensagem for um follow-up curto como "sim", "gostaria", "pode ser", "quero", "me explica"
+  ou "continua", interprete como aceitação da última oferta feita pelo assistente.
+- Não trate follow-up curto como consulta nova e não reinicie com canais oficiais.
 
 ESTILO:
 - Responda em blocos curtos, com quebras de linha e tópicos simples.
@@ -1604,8 +1713,15 @@ def responder_pergunta(
     # Contexto juridico so entra no modo real. No modo fachada, injetar chunks
     # sobre Lei Maria da Penha fazia cumprimentos simples parecerem juridicos.
     contexto = []
+    categoria_rag = None
     if modo == "real":
-        contexto = buscar_chunks_relevantes(pergunta_provedor, embedding_service, colecao)
+        categoria_rag = classificar_categoria_rag(pergunta_provedor, triagem=triagem, historico=historico_provedor)
+        contexto = buscar_chunks_relevantes(
+            pergunta_provedor,
+            embedding_service,
+            colecao,
+            categoria=categoria_rag,
+        )
     contexto_str = "\n".join(contexto)
 
     system_prompt = system_prompt_real if modo == "real" else system_prompt_fachada
@@ -1632,16 +1748,26 @@ def responder_pergunta(
         messages.append({"role": "system", "content": prefixo_classificacao})
 
     dialogo_recente = extrair_dialogo_recente(historico_provedor)
+    tokens_followup_curto = {"sim", "gostaria", "pode ser", "quero", "me explica", "continua", "ok"}
+    pergunta_curta = _normalizar_busca(pergunta_provedor)
+    instrucao_followup = ""
+    if len(pergunta_curta.split()) <= 3 and pergunta_curta in tokens_followup_curto:
+        instrucao_followup = (
+            "\n\nFOLLOW-UP CURTO DETECTADO: a mensagem atual parece aceitar a ultima oferta do assistente. "
+            "Continue a explicacao oferecida anteriormente, sem reiniciar a conversa e sem listar canais oficiais."
+        )
     messages.append({
         "role": "system",
         "content": (
             f"MODO ATIVO: {modo.upper()}.\n"
+            f"INTENCAO RAG: {categoria_rag or 'nenhuma'}.\n"
             "Mantenha continuidade com a conversa recente. "
             "Não ignore fatos já mencionados e não repita perguntas já respondidas.\n\n"
             "Se a usuaria ja relatou abuso/controle e agora pede direitos, BO, medida protetiva, "
             "Defensoria ou diz que pode conversar, responda a esse pedido com orientacao objetiva. "
             "Nao reinicie a conversa perguntando novamente se ela esta segura, a menos que haja novo sinal de risco imediato.\n\n"
             f"DIÁLOGO RECENTE:\n{dialogo_recente or 'Nenhum diálogo recente registrado.'}"
+            f"{instrucao_followup}"
         ),
     })
 

@@ -441,6 +441,122 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("https://www.delegaciaeletronica.ce.gov.br/beo/", contexto)
         self.assertIn("Rua Ernani Martins, 45, Diadema", contexto)
 
+    def test_prompt_separates_legal_information_from_channel_referral(self):
+        import conteudo_chat
+
+        prompt = _sem_acentos(conteudo_chat.system_prompt_real)
+
+        self.assertIn("informacao juridica", prompt)
+        self.assertIn("encaminhamento pratico", prompt)
+        self.assertIn("nao despeje listas de canais", prompt)
+        self.assertIn("follow-up curto", prompt)
+
+    def test_rag_query_can_filter_by_legislation_category(self):
+        import conteudo_chat
+
+        captured = {}
+
+        class EmbeddingFake:
+            def embed(self, texts, task_type=None):
+                return [[0.1, 0.2, 0.3]]
+
+        class ColecaoFake:
+            def count(self):
+                return 1
+
+            def query(self, **kwargs):
+                captured.update(kwargs)
+                return {"documents": [["chunk legislacao"]]}
+
+        conteudo_chat._colecao_populada = None
+
+        chunks = conteudo_chat.buscar_chunks_relevantes(
+            "o que a lei fala sobre violencia psicologica?",
+            EmbeddingFake(),
+            ColecaoFake(),
+            categoria="legislacao",
+        )
+
+        self.assertEqual(chunks, ["chunk legislacao"])
+        self.assertEqual(captured["where"], {"categoria": "legislacao"})
+
+    def test_rag_indexing_stores_category_metadata_per_chunk(self):
+        import conteudo_chat
+
+        captured = {}
+
+        class ColecaoFake:
+            def get(self):
+                return {"ids": []}
+
+            def add(self, **kwargs):
+                captured.update(kwargs)
+
+        chunks = [
+            "Lei Maria da Penha e violencia psicologica como crime",
+            "CANAIS OFICIAIS Ligue 180 Policia Militar 190",
+            "Como fazer BO eletronico e pedir medida protetiva",
+            "Plano de seguranca e saida rapida do aplicativo",
+        ]
+
+        conteudo_chat.armazenar_chunks_com_embeddings(
+            chunks,
+            [[0.0]] * len(chunks),
+            ColecaoFake(),
+        )
+
+        categorias = [m["categoria"] for m in captured["metadatas"]]
+        self.assertEqual(categorias, ["legislacao", "canais", "procedimentos", "acolhimento"])
+
+    def test_responder_pergunta_filters_rag_and_instructs_short_followup(self):
+        import conteudo_chat
+
+        captured = {}
+
+        class EmbeddingFake:
+            def embed(self, texts, task_type=None):
+                return [[0.1, 0.2, 0.3]]
+
+        class ColecaoFake:
+            def count(self):
+                return 1
+
+            def query(self, **kwargs):
+                captured["query"] = kwargs
+                return {"documents": [["conteudo de legislacao"]]}
+
+        def fake_groq(messages, **kwargs):
+            captured["messages"] = messages
+            return "ok"
+
+        conteudo_chat._colecao_populada = None
+
+        with patch.object(conteudo_chat, "criar_chat_groq", side_effect=fake_groq):
+            conteudo_chat.responder_pergunta(
+                pergunta="Gostaria",
+                embedding_service=EmbeddingFake(),
+                colecao=ColecaoFake(),
+                historico=[
+                    {"role": "user", "content": "Ele me diz que nao sou mulher de verdade"},
+                    {"role": "assistant", "content": "Posso te explicar primeiro Lei Maria da Penha, nome social ou Defensoria?"},
+                ],
+                modo="real",
+                triagem={
+                    "nivel": "pedido_orientacao",
+                    "risco_imediato": False,
+                    "tipos_violencia": [],
+                    "sinais_fonar": ["pedido_lei_contextual", "identidade_genero_trans"],
+                    "acao_resposta": "orientar_direitos_contextuais",
+                },
+                session_id="sess_test",
+            )
+
+        self.assertEqual(captured["query"]["where"], {"categoria": "legislacao"})
+        contexto = "\n".join(m["content"] for m in captured["messages"])
+        contexto_normalizado = _sem_acentos(contexto)
+        self.assertIn("follow-up curto", contexto_normalizado)
+        self.assertIn("gostaria", contexto_normalizado)
+
     def test_prompt_injection_log_does_not_echo_private_message(self):
         import conteudo_chat
 
