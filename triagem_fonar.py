@@ -149,6 +149,15 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         "ser trans e doenca", "ser trans é doença",
         "travesti nao e mulher", "travesti não é mulher",
         "minha identidade", "minha transicao", "minha transição",
+        "menos feminina", "menos feminino", "menos mulher",
+        "menos masculino", "menos homem", "nao feminina", "não feminina",
+        "nao masculino", "não masculino",
+    ]
+    desabafos_emocionais = [
+        "me diz que", "me chamou de", "sinto que", "me sinto",
+        "ele disse que", "ela disse que", "nao me aceita", "não me aceita",
+        "nao sou", "não sou", "tenho vergonha", "tenho medo", "nao aguento",
+        "não aguento",
     ]
     invalidacao_genero = [
         "nao sou mulher de verdade", "não sou mulher de verdade",
@@ -350,6 +359,13 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
         if _tem(t, violencias_transfobicas) or _tem(t, invalidacao_genero) or _tem(t, invisibilizacao_identidade):
             tipos.append("psicologica")
             sinais.append("direitos_lgbtqia")
+            sinais.append("violencia_psicologica")
+            sinais.append("violencia_psicologica_transfobica")
+    if _tem(t, desabafos_emocionais):
+        sinais.append("desabafo_emocional")
+        if _tem(t, identidade_genero_trans) or _tem(t, violencias_transfobicas):
+            tipos.append("psicologica")
+            sinais.append("identidade_genero_trans")
             sinais.append("violencia_psicologica")
             sinais.append("violencia_psicologica_transfobica")
     if _tem(t, invalidacao_genero):
@@ -671,6 +687,7 @@ def historico_indica_modo_real(historico: list[dict] | None) -> bool:
         "identidade_genero_trans",
         "direitos_lgbtqia",
         "negacao_direitos_por_genero",
+        "desabafo_emocional",
         "invalidacao_genero",
         "violencia_psicologica_transfobica",
         "controle_sobre_filhos",

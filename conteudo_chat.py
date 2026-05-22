@@ -272,6 +272,12 @@ def _espelhar_relato_acolhedor(pergunta: str, triagem: dict) -> str:
     sinais = set(triagem.get("sinais_fonar") or [])
     tipos = set(triagem.get("tipos_violencia") or [])
 
+    if "desabafo_emocional" in sinais and "identidade_genero_trans" in sinais:
+        return (
+            "Sinto muito que ele esteja falando com você desse jeito. "
+            "Pessoas trans não deveriam ter sua identidade ou seu jeito de ser usados para diminuir quem são, e não é culpa sua."
+        )
+
     if "violencia_psicologica_transfobica" in sinais:
         return (
             "Sinto muito que sua identidade esteja sendo usada para te humilhar. "
@@ -896,6 +902,41 @@ def _normalizar_busca(texto: str) -> str:
     return re.sub(r"\s+", " ", texto).strip()
 
 
+PADROES_DESABAFO_EMOCIONAL = [
+    r"\bme diz que\b",
+    r"\bele me diz que\b",
+    r"\bela me diz que\b",
+    r"\bme chamou de\b",
+    r"\bele disse que\b",
+    r"\bela disse que\b",
+    r"\bsinto que\b",
+    r"\bme sinto\b",
+    r"\bnao me aceita\b",
+    r"\bnao sou\b",
+    r"\btenho vergonha\b",
+    r"\btenho medo\b",
+    r"\bnao aguento\b",
+]
+
+
+def e_desabafo_emocional(mensagem: str) -> bool:
+    """Detecta relato/desabafo para impedir RAG juridico na primeira resposta."""
+    t = _normalizar_busca(mensagem)
+    if not t:
+        return False
+
+    pedido_explicito = [
+        "o que a lei", "oque a lei", "lei fala", "lei diz",
+        "quais sao meus direitos", "quais sao os meus direitos",
+        "boletim", "bo ", "medida protetiva", "denunciar",
+        "telefone", "endereco", "onde fica",
+    ]
+    if any(p in t for p in pedido_explicito):
+        return False
+
+    return any(re.search(padrao, t) for padrao in PADROES_DESABAFO_EMOCIONAL)
+
+
 def categorizar_chunk_rag(texto: str) -> str:
     """Categoria tematica para permitir RAG filtrado sem separar colecoes."""
     t = _normalizar_busca(texto)
@@ -933,6 +974,9 @@ def classificar_categoria_rag(pergunta: str, triagem: dict | None = None, histor
     t = _normalizar_busca(pergunta)
     sinais = set(triagem.get("sinais_fonar") or [])
     acao = triagem.get("acao_resposta")
+
+    if e_desabafo_emocional(pergunta) or "desabafo_emocional" in sinais:
+        return "acolhimento"
 
     if acao == "orientar_direitos_contextuais" or "pedido_lei_contextual" in sinais:
         return "legislacao"
@@ -1456,6 +1500,10 @@ denúncia.
 MODOS DE PERGUNTA:
 - Acolhimento: quando a usuária relata dor, medo, humilhação, controle ou violência.
   Responda primeiro ao sentimento e à segurança. Não abra com lista de canais, salvo risco imediato.
+- Desabafo emocional: se a pessoa compartilha uma dor, humilhação, vergonha, medo ou frase
+  dita contra ela ("me diz que", "me chamou de", "não sou", "não me aceita"), responda apenas com acolhimento humano e empático nessa primeira resposta. NÃO mencione leis, canais ou direitos.
+  No final, pergunte UMA coisa: se ela quer conversar mais sobre o que está sentindo ou se prefere
+  saber sobre algum direito ou apoio disponível.
 - Informação jurídica: quando a usuária pergunta "o que a lei fala", "quais são meus direitos",
   nome social, Lei Maria da Penha, filhos, guarda ou violência psicológica. Explique a regra em
   linguagem simples e contextual. NÃO despeje listas de canais nem telefones; no máximo mencione
@@ -1548,24 +1596,28 @@ def resposta_contingencia(pergunta, modo="real", classificacao=None, triagem=Non
 
         if nivel == "violencia_sem_risco_imediato":
             complemento = ""
+            sinais = set(triagem.get("sinais_fonar") or [])
             if "digital" in tipos:
                 complemento = (
                     "\n\nSe for seguro, tente guardar provas: prints, links, datas, nomes de perfis "
                     "e mensagens. Não precisa confrontar ele para fazer isso."
                 )
-            elif "restricao_liberdade" in set(triagem.get("sinais_fonar") or []):
+            elif "restricao_liberdade" in sinais:
                 complemento = (
                     "\n\nSe você estiver segura agora, posso te explicar seus direitos e os caminhos oficiais "
                     "com calma, no seu tempo."
                 )
             espelho = _espelhar_relato_acolhedor(pergunta, triagem)
             pergunta_seguranca = _pergunta_segura_contextual(triagem)
+            rodape_risco = ""
+            if "desabafo_emocional" not in sinais:
+                rodape_risco = "\n\nSe em algum momento houver risco imediato, ligue 190 ou 180."
             return (
                 f"{espelho}\n\n"
                 f"{pergunta_seguranca}"
-                f"{complemento}\n\n"
-                "Se em algum momento houver risco imediato, ligue 190 ou 180."
-            )
+                f"{complemento}"
+                f"{rodape_risco}"
+            ).strip()
 
         if "filhos_comigo" in set(triagem.get("sinais_fonar") or []):
             return (

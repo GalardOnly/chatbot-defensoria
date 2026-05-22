@@ -450,6 +450,76 @@ class HorizonteFlowTest(unittest.TestCase):
         self.assertIn("encaminhamento pratico", prompt)
         self.assertIn("nao despeje listas de canais", prompt)
         self.assertIn("follow-up curto", prompt)
+        self.assertIn("desabafo emocional", prompt)
+        self.assertIn("responda apenas com acolhimento", prompt)
+
+    def test_desabafo_trans_uses_acolhimento_category_not_legislation(self):
+        import conteudo_chat
+
+        categoria = conteudo_chat.classificar_categoria_rag(
+            "meu namorado me diz que sou menos feminina por ser trans"
+        )
+
+        self.assertEqual(categoria, "acolhimento")
+
+    def test_fallback_acolhe_desabafo_trans_sem_contexto_juridico(self):
+        import conteudo_chat
+
+        resposta = conteudo_chat.resposta_contingencia(
+            "meu namorado me diz que sou menos feminina por ser trans",
+            modo="real",
+        )
+
+        resposta_normalizada = _sem_acentos(resposta)
+        self.assertIn("nao e culpa", resposta_normalizada)
+        self.assertIn("segura", resposta_normalizada)
+        self.assertNotIn("lei maria da penha", resposta_normalizada)
+        self.assertNotIn("disque 100", resposta_normalizada)
+        self.assertNotIn("retificacao", resposta_normalizada)
+        self.assertNotIn("190", resposta_normalizada)
+        self.assertNotIn("180", resposta_normalizada)
+
+    def test_responder_pergunta_filters_desabafo_rag_to_acolhimento(self):
+        import conteudo_chat
+
+        captured = {}
+
+        class EmbeddingFake:
+            def embed(self, texts, task_type=None):
+                return [[0.1, 0.2, 0.3]]
+
+        class ColecaoFake:
+            def count(self):
+                return 1
+
+            def query(self, **kwargs):
+                captured["query"] = kwargs
+                return {"documents": [["conteudo de acolhimento"]]}
+
+        def fake_groq(messages, **kwargs):
+            captured["messages"] = messages
+            return "ok"
+
+        conteudo_chat._colecao_populada = None
+
+        with patch.object(conteudo_chat, "criar_chat_groq", side_effect=fake_groq):
+            conteudo_chat.responder_pergunta(
+                pergunta="meu namorado me diz que sou menos feminina por ser trans",
+                embedding_service=EmbeddingFake(),
+                colecao=ColecaoFake(),
+                historico=[],
+                modo="real",
+                triagem={
+                    "nivel": "violencia_sem_risco_imediato",
+                    "risco_imediato": False,
+                    "tipos_violencia": ["psicologica"],
+                    "sinais_fonar": ["desabafo_emocional", "identidade_genero_trans"],
+                    "acao_resposta": "acolher_e_perguntar_seguranca",
+                },
+                session_id="sess_test",
+            )
+
+        self.assertEqual(captured["query"]["where"], {"categoria": "acolhimento"})
 
     def test_rag_query_can_filter_by_legislation_category(self):
         import conteudo_chat

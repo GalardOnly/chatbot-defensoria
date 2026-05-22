@@ -387,6 +387,17 @@ class TriagemFonarTest(unittest.TestCase):
         self.assertIn("invalidacao_genero", triagem["sinais_fonar"])
         self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
 
+    def test_desabafo_trans_sobre_feminilidade_acolhe_sem_virar_legislacao(self):
+        triagem = avaliar_triagem_fonar(
+            "meu namorado me diz que sou menos feminina por ser trans"
+        )
+
+        self.assertEqual(triagem["nivel"], "violencia_sem_risco_imediato")
+        self.assertIn("psicologica", triagem["tipos_violencia"])
+        self.assertIn("identidade_genero_trans", triagem["sinais_fonar"])
+        self.assertIn("desabafo_emocional", triagem["sinais_fonar"])
+        self.assertEqual(triagem["acao_resposta"], "acolher_e_perguntar_seguranca")
+
     def test_pergunta_sobre_lei_com_contexto_recente_nao_vira_orientacao_generica(self):
         triagem = avaliar_triagem_fonar(
             "Me sinto segura, queria entender oque a lei fala sobre isso",
