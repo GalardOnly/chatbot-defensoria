@@ -94,7 +94,7 @@ ele me bateu com força até eu me render,fisica,alta,violencia_2000
 "meu companheiro me puxou pelo braço leve, me critica e verifica celular",mista,baixa,violencia_2000
 meu marido pegou meu dinheiro de aposentadoria guardado,patrimonial,alta,violencia_2000
 meu marido faz comentários comparando-me com outras mulheres,psicologica,baixa,violencia_2000
-meu marido me ameaça tirar minha guarda dos filhos se eu sair,psicologica,alta,violencia_2000
+meu marido me ameaça tirar minha guarda dos filhos se eu sair,vicaria,alta,violencia_2000_realocado_vicaria
 meu marido me esmagou a mão na porta de propósito,fisica,alta,violencia_2000
 meu namorado faz comentários sobre minha forma de lidar com pressão,moral,baixa,violencia_2000
 ele faz pouco caso de mim durante dias se eu recusar,sexual,media,violencia_2000
@@ -1083,7 +1083,7 @@ ele me pressiona a assistir conteúdo adulto com ele,sexual,baixa,violencia_2000
 "meu marido me empurrou de leve durante a briga, me diminui e controla o que gasto",mista,baixa,violencia_2000
 ele me empurrou quando eu tentei pegar o celular dele,fisica,baixa,violencia_2000
 "ele me agrediu físicamente, me xinga de louca e me controla economicamente",mista,media,violencia_2000
-ele ameaça matar nosso cachorro se eu não obedecer,psicologica,alta,violencia_2000
+ele ameaça matar nosso cachorro se eu não obedecer,vicaria,alta,violencia_2000_realocado_vicaria
 ele destruiu meu celular que era meu único meio de comunicação,patrimonial,alta,violencia_2000
 ele fica comentando sobre artistas de forma sexualizada na minha frente,sexual,baixa,violencia_2000
 ele reclama quando gasto tempo cuidando de mim mesma,psicologica,baixa,violencia_2000
@@ -1315,7 +1315,7 @@ meu marido me pressiona após eventos sociais onde bebeu,sexual,media,violencia_
 meu companheiro vendeu meu carro sem minha autorização,patrimonial,alta,violencia_2000
 ele faz piadinhas sobre meu peso que me incomodam,psicologica,baixa,violencia_2000
 ele me chutou na canela com força durante a briga,fisica,media,violencia_2000
-meu marido me ameaça matar meu cachorro que amo se eu não ceder,psicologica,alta,violencia_2000
+meu marido me ameaça matar meu cachorro que amo se eu não ceder,vicaria,alta,violencia_2000_realocado_vicaria
 ele me puxou a mão para me impedir de ligar para alguém,fisica,baixa,violencia_2000
 meu marido reclama quando não estou disponível quando ele quer,psicologica,baixa,violencia_2000
 meu namorado faz comentários sexuais que me deixam desconfortável,sexual,baixa,violencia_2000
@@ -1601,7 +1601,7 @@ meu marido não me deixa assistir televisão livremente,psicologica,media,violen
 ele me puxou pelo braço na rua e me deixou com hematoma,fisica,media,violencia_2000
 ele não me deixa fazer empréstimo pessoal sem sua aprovação,patrimonial,baixa,violencia_2000
 "meu marido me deu empurrão leve na discussão, me diminui bastante e controla salário",mista,baixa,violencia_2000
-meu companheiro ameaçou minha mãe se eu fosse embora,psicologica,alta,violencia_2000
+meu companheiro ameaçou minha mãe se eu fosse embora,vicaria,alta,violencia_2000_realocado_vicaria
 "meu companheiro me puxou de leve, faz comentários ruins sobre minha família e controla saídas",mista,baixa,violencia_2000
 meu marido não me deixa comprar livros dizendo que é desperdício,patrimonial,baixa,violencia_2000
 meu companheiro me ameaça dizendo que vai me fazer passar vergonha,psicologica,media,violencia_2000
@@ -2317,7 +2317,7 @@ ele aparece na minha vizinhança toda quinta sem motivo,stalking,baixa,stalking
 manda música pelo spotify pra mim toda noite,stalking,baixa,stalking
 ele mandou foto da porta da escola da minha filha dizendo bom dia,stalking,alta,stalking
 ele invadiu meu apartamento e deixou uma foto minha em cima da cama,stalking,alta,stalking
-ele tá ameaçando matar meu cachorro se eu não voltar,stalking,alta,stalking
+ele tá ameaçando matar meu cachorro se eu não voltar,vicaria,alta,stalking_realocado_vicaria
 ele me liga descrevendo o que tô vestindo em tempo real,stalking,alta,stalking
 ele mandou bilhete dentro da minha bolsa que tava trancada no carro,stalking,alta,stalking
 ele me obrigou a abrir a porta apontando arma na janela,stalking,alta,stalking
@@ -2367,3 +2367,275 @@ manda música de mensagem subliminar pelo spotify,stalking,baixa,stalking
 ele me marca em postagens de casais felizes pra me provocar,stalking,baixa,stalking
 aparece no estacionamento do shopping toda vez que vou,stalking,baixa,stalking
 ele se inscreve em todo curso online que eu posto que tô fazendo,stalking,baixa,stalking
+meu marido me ameaça tirar a guarda dos filhos se eu denunciar,vicaria,alta,vicaria_cis
+ele disse que se eu sair de casa nunca mais vejo as crianças,vicaria,alta,vicaria_cis
+meu companheiro fala mal de mim para os filhos pra eles me odiarem,vicaria,media,vicaria_cis
+ele inventa mentiras sobre mim pros filhos acreditarem que sou má,vicaria,media,vicaria_cis
+meu marido manipula nossos filhos contra mim faz dois anos,vicaria,alta,vicaria_cis
+ele chega em casa e bate no nosso filho pra eu sentir culpa,vicaria,alta,vicaria_cis
+meu marido ameaça machucar nosso bebê se eu pedir o divórcio,vicaria,alta,vicaria_cis
+ele ameaça envenenar meu cachorro se eu o desafiar,vicaria,alta,vicaria_cis
+meu companheiro matou meu gato pra me punir por ter saído com amigas,vicaria,alta,vicaria_cis
+ele espanca meu cachorro toda vez que briga comigo,vicaria,alta,vicaria_cis
+meu marido ameaça ir na escola das crianças contar mentiras sobre mim,vicaria,media,vicaria_cis
+ele disse que ia matar meu pai se eu denunciasse ele,vicaria,alta,vicaria_cis
+meu companheiro ameaçou minha irmã pra ela parar de me defender,vicaria,alta,vicaria_cis
+ele bateu na minha mãe quando ela veio me visitar,vicaria,alta,vicaria_cis
+meu marido obriga os filhos a vigiarem o que eu faço quando ele sai,vicaria,media,vicaria_cis
+ele dá presente caro pros filhos pra eles preferirem ele a mim,vicaria,media,vicaria_cis
+meu marido fingiu doença grave do nosso filho pra eu não viajar a trabalho,vicaria,media,vicaria_cis
+ele suja a comida que eu dou pros filhos e diz que eu cuido mal deles,vicaria,alta,vicaria_cis
+meu companheiro ensinou as crianças a me chamarem por apelido pejorativo,vicaria,media,vicaria_cis
+ele pega os filhos no fim de semana só pra não me deixar descansar,vicaria,baixa,vicaria_cis
+meu marido aplica regras absurdas pros filhos só pra eu lidar com a birra,vicaria,media,vicaria_cis
+ele falou pros vizinhos que sou louca pra usar contra mim na guarda,vicaria,media,vicaria_cis
+meu marido prometeu pros filhos que se eu sair eles ficam sem brinquedo,vicaria,media,vicaria_cis
+ele esconde as roupas e remédios dos filhos pra parecer que sou descuidada,vicaria,media,vicaria_cis
+meu companheiro me ameaçou levar as crianças pra outro estado se eu reclamar,vicaria,alta,vicaria_cis
+ele combinou com a mãe dele de tomar a guarda dos meus filhos,vicaria,alta,vicaria_cis
+meu marido convocou os filhos pra escolher entre nós dois aos dez anos,vicaria,media,vicaria_cis
+ele filma os filhos chorando e manda pra mim pra eu sofrer no trabalho,vicaria,alta,vicaria_cis
+meu marido disse que se eu denunciar ele incrimina meu filho menor,vicaria,alta,vicaria_cis
+ele bate no meu enteado pra eu não conseguir me concentrar no trabalho,vicaria,alta,vicaria_cis
+meu companheiro ameaça matar meus pais idosos se eu não voltar pra ele,vicaria,alta,vicaria_cis
+ele inventou que sou viciada pra promotoria pra tirar minha guarda,vicaria,alta,vicaria_cis
+meu marido conta segredos meus para os filhos como se fosse confidência,vicaria,media,vicaria_cis
+ele força os filhos a passarem o domingo sem mim pra me isolar,vicaria,media,vicaria_cis
+meu marido fez requerimento pra perícia psiquiátrica em mim sem motivo,vicaria,media,vicaria_cis
+ele desligou os tratamentos dos meus pais idosos pra eu correr lá,vicaria,alta,vicaria_cis
+meu companheiro convenceu meus pais que sou alcoólatra pra me afastar,vicaria,media,vicaria_cis
+ele criou um perfil falso pros filhos e disse que era do amante meu,vicaria,alta,vicaria_cis
+meu marido se nega a dar comida pros filhos quando ele tá com raiva de mim,vicaria,alta,vicaria_cis
+ele faz birra na frente dos filhos pra eu ceder em tudo,vicaria,media,vicaria_cis
+meu marido cortou o convênio das crianças por raiva de mim,vicaria,alta,vicaria_cis
+ele ensina expressões machistas pros nossos meninos quando volta da rua,vicaria,media,vicaria_cis
+meu companheiro joga vídeo game alto pros filhos não conseguirem fazer dever,vicaria,baixa,vicaria_cis
+ele se recusou a levar nossa filha ao médico só pra me forçar a faltar trabalho,vicaria,media,vicaria_cis
+meu marido proíbe os filhos de me abraçarem na frente dele,vicaria,media,vicaria_cis
+ele finge esquecer de buscar os filhos na escola pra eu ser cobrada,vicaria,media,vicaria_cis
+meu companheiro chantageou nossa filha adolescente contra mim com dinheiro,vicaria,alta,vicaria_cis
+ele apareceu armado na minha mãe ameaçando me machucar,vicaria,alta,vicaria_cis
+meu marido sumiu com nosso filho durante a visita e ficou três dias,vicaria,alta,vicaria_cis
+ele empurrou meu pai quando tentou intervir na briga,vicaria,alta,vicaria_cis
+meu marido instalou câmeras no quarto das crianças pra me vigiar por elas,vicaria,alta,vicaria_cis
+ele tortura psicologicamente nossa filha com piadas pra ela ficar do lado dele,vicaria,alta,vicaria_cis
+meu companheiro convence as crianças que eu vou abandonar elas,vicaria,alta,vicaria_cis
+ele apareceu na festa da minha sobrinha gritando que sou má mãe,vicaria,media,vicaria_cis
+meu marido se recusou a assinar autorização de viagem dos filhos pra me isolar,vicaria,media,vicaria_cis
+ele tatuou nome dele nos nossos filhos sem me consultar,vicaria,media,vicaria_cis
+meu companheiro mostrou as crianças vídeos íntimos nossos pra me humilhar,vicaria,alta,vicaria_cis
+ele me ameaça denunciar falsamente ao conselho tutelar pra eu calar,vicaria,alta,vicaria_cis
+meu marido enche os filhos de açúcar antes de me devolver eles agitados,vicaria,baixa,vicaria_cis
+ele entrou na escola dos filhos gritando que eu era prostituta,vicaria,alta,vicaria_cis
+meu companheiro pegou meu sobrinho na escola sem autorização pra me assustar,vicaria,alta,vicaria_cis
+ele liga toda noite na hora do banho das crianças pra me atrapalhar,vicaria,baixa,vicaria_cis
+meu marido obriga nosso filho a mentir pro juiz na audiência sobre mim,vicaria,alta,vicaria_cis
+ele desaparece com o cachorro toda vez que briga comigo,vicaria,media,vicaria_cis
+meu companheiro suja toalha menstrual minha e culpa nossa filha pequena,vicaria,alta,vicaria_cis
+ele queima brinquedo favorito do nosso filho pra ver eu sofrer,vicaria,alta,vicaria_cis
+meu marido obrigou nossa filha a chamar a amante dele de mãe,vicaria,alta,vicaria_cis
+ele inventou crise para sequestrar emocional dos filhos enquanto eu trabalhava,vicaria,alta,vicaria_cis
+meu companheiro está dopando nossa filha sem prescrição pra ela ficar quieta,vicaria,alta,vicaria_cis
+ele atropelou o cachorro propositalmente na frente das crianças,vicaria,alta,vicaria_cis
+meu marido ameaça contar pra escola que sou drogada se eu falar com a diretora,vicaria,alta,vicaria_cis
+ele convence as crianças que eu não amo elas porque trabalho fora,vicaria,media,vicaria_cis
+meu companheiro me ameaça desfigurar a cachorra se eu sair de novo,vicaria,alta,vicaria_cis
+ele inscreveu nossa filha em curso longe pra eu não conseguir levar,vicaria,media,vicaria_cis
+meu marido falou pro meu pai infartar de novo se eu o denunciar,vicaria,alta,vicaria_cis
+ele instalou rastreador no celular dos nossos filhos pra me monitorar,vicaria,alta,vicaria_cis
+meu companheiro corrompeu nosso adolescente pra ele me roubar dinheiro,vicaria,alta,vicaria_cis
+ele apronta pra meu cachorro morrer de sede quando eu viajo,vicaria,alta,vicaria_cis
+meu marido finge que vai se matar na frente dos filhos pra eu não sair,vicaria,alta,vicaria_cis
+ele ameaça expor fotos íntimas de mim pros nossos filhos verem,vicaria,alta,vicaria_cis
+meu companheiro convenceu meu irmão de que eu era responsável pelo divórcio dele,vicaria,media,vicaria_cis
+meu marido ameaça contar pros nossos filhos que sou trans se eu denunciar,vicaria,alta,vicaria_trans
+ele disse pros filhos que sou homem pra eles me rejeitarem,vicaria,alta,vicaria_trans
+meu companheiro proibiu nossas crianças de me chamarem de mãe na frente da família dele,vicaria,alta,vicaria_trans
+ele mostrou foto minha antes da transição pros nossos filhos pra me humilhar,vicaria,alta,vicaria_trans
+meu marido obriga nossa filha a me chamar pelo nome morto na frente da avó dela,vicaria,alta,vicaria_trans
+ele ameaça expor minha transição na escola das crianças se eu pedir guarda,vicaria,alta,vicaria_trans
+meu companheiro convenceu nosso filho que eu não sou mulher de verdade,vicaria,alta,vicaria_trans
+ele cortou hormônios do meu cachorrinho idoso por raiva de eu ser trans,vicaria,alta,vicaria_trans
+meu marido inventa pros nossos filhos que sou perigosa por ser travesti,vicaria,alta,vicaria_trans
+ele disse pros filhos que se ficar comigo eles também vão virar travesti,vicaria,alta,vicaria_trans
+meu companheiro mostrou meu documento antigo pros nossos filhos verem,vicaria,alta,vicaria_trans
+ele ameaça denunciar à vara da família que sou trans pra tirar a guarda,vicaria,alta,vicaria_trans
+meu marido conta detalhes da minha cirurgia de transição pros filhos pra eles terem nojo,vicaria,alta,vicaria_trans
+ele ensinou nossa filha pequena a falar que tem dois pais pra eu ouvir,vicaria,alta,vicaria_trans
+meu companheiro forçou nosso filho a escolher entre nós pelo gênero,vicaria,alta,vicaria_trans
+ele disse pra família dele que eu enganei eles e quer afastar meus sobrinhos,vicaria,alta,vicaria_trans
+meu marido jurou matar meu cachorro se eu insistir em usar nome social com as crianças,vicaria,alta,vicaria_trans
+ele ameaça meu pai que apoia minha transição se eu o desafiar,vicaria,alta,vicaria_trans
+meu companheiro ameaça suicidar dizendo que filho dele não pode ter mãe trans,vicaria,alta,vicaria_trans
+ele manipula nossa adolescente a falar que eu sou doente mental,vicaria,alta,vicaria_trans
+ele me bate na cara toda vez que eu uso maquiagem,fisica,alta,trans_diversificado
+meu marido me deu um soco quando descobriu que tô em transição hormonal,fisica,alta,trans_diversificado
+ele me estrangulou dizendo que ia me devolver pra antes da transição,fisica,alta,trans_diversificado
+meu companheiro me arrastou pelo cabelo dizendo que cabelo de homem não cresce,fisica,alta,trans_diversificado
+ele me deu uma surra porque depilei o corpo todo,fisica,alta,trans_diversificado
+meu marido me chuta sempre que eu uso vestido em casa,fisica,alta,trans_diversificado
+ele me bateu com cinto quando descobriu minha caixa de hormônios,fisica,alta,trans_diversificado
+meu companheiro me empurrou da escada quando soube da minha cirurgia marcada,fisica,alta,trans_diversificado
+ele me sufoca com travesseiro quando recuso transar como homem,fisica,alta,trans_diversificado
+meu namorado me deu tapas na cara por eu ter pintado as unhas,fisica,media,trans_diversificado
+ele me chutou na barriga depois da minha cirurgia mamária,fisica,alta,trans_diversificado
+meu marido me bateu com cabide porque puxei nome social com a vizinha,fisica,alta,trans_diversificado
+ele me agride sempre que vou no salão fazer escova,fisica,media,trans_diversificado
+meu companheiro me jogou contra a parede gritando que sou homem,fisica,alta,trans_diversificado
+ele me bateu na perna pra eu não conseguir desfilar no carnaval,fisica,alta,trans_diversificado
+meu marido me empurrou e bateu minha cabeça na pia por ser travesti,fisica,alta,trans_diversificado
+ele me deu murro no peito recém operado dizendo que ia desfazer,fisica,alta,trans_diversificado
+meu companheiro me trancou no banheiro com força agarrando meu braço,fisica,media,trans_diversificado
+ele me agarra forte pelo pulso toda vez que falo de mudar documento,fisica,media,trans_diversificado
+meu namorado me bateu com chinelo no rosto enquanto eu me maquiava,fisica,media,trans_diversificado
+ele me puxou pelo cabelo gritando que cabelo comprido não é coisa de homem,fisica,alta,trans_diversificado
+meu marido me espancou e quebrou minha prótese de silicone com pisão,fisica,alta,trans_diversificado
+ele me jogou água quente porque tava fazendo a barba a laser,fisica,alta,trans_diversificado
+meu companheiro me deu chute nas costas quando eu tava ajustando o sutiã,fisica,alta,trans_diversificado
+ele tentou cortar meu cabelo à força com tesoura enquanto eu dormia,fisica,alta,trans_diversificado
+meu marido me bateu pra eu ficar de quarentena depois da cirurgia em casa,fisica,alta,trans_diversificado
+ele me deu socos onde implantei silicone pra deformar,fisica,alta,trans_diversificado
+meu companheiro me agride sempre que vê meu corpo nu mais feminino,fisica,alta,trans_diversificado
+ele me jogou no chão e pisou na minha mão dizendo que mão de mulher não trabalha,fisica,media,trans_diversificado
+meu namorado me deu uma cotovelada quando aceitei convite pra evento trans,fisica,media,trans_diversificado
+ele me forçou ter relações dizendo que eu ainda sou homem pra isso,sexual,alta,trans_diversificado
+meu marido me obriga ter relação com penetração pra provar que sou homem,sexual,alta,trans_diversificado
+ele me estuprou dizendo que ia me curar de ser trans,sexual,alta,trans_diversificado
+meu companheiro me obriga a despir e olha pra parte que ele quer ainda ver,sexual,alta,trans_diversificado
+ele me força a chupar ele mesmo eu não querendo desde a transição,sexual,alta,trans_diversificado
+meu marido me obriga a usar pênis durante o sexo pra estimular ele,sexual,alta,trans_diversificado
+ele me chama de viado durante o sexo pra excitar ele,sexual,media,trans_diversificado
+meu companheiro me filmou nua sem consentimento pra mostrar pros amigos,sexual,alta,trans_diversificado
+ele me obrigou a ter relação no terceiro dia pós cirurgia,sexual,alta,trans_diversificado
+meu namorado paga pra eu ter relação com amigos dele,sexual,alta,trans_diversificado
+ele me ameaça contar minha condição trans se eu não fizer o que ele quer no sexo,sexual,alta,trans_diversificado
+meu marido me obriga a usar peruca durante o sexo,sexual,media,trans_diversificado
+ele me obriga ter sexo doloroso porque a vagina ainda não tá cicatrizada,sexual,alta,trans_diversificado
+meu companheiro divulga minha foto trans em sites pornô pra render dinheiro pra ele,sexual,alta,trans_diversificado
+ele me força a usar lingerie específica que humilha minha condição,sexual,media,trans_diversificado
+meu marido me obriga a fingir voz grossa no sexo pra ele se sentir hetero,sexual,media,trans_diversificado
+ele me amarra na cama e tira foto da parte íntima pra chantagem,sexual,alta,trans_diversificado
+meu companheiro me obriga a ter sexo a três com prostitutas cis pra comparar,sexual,alta,trans_diversificado
+ele me agarra a força quando bebe e diz que travesti é pra isso,sexual,alta,trans_diversificado
+meu namorado força beijo na boca sempre que eu choro,sexual,media,trans_diversificado
+ele me obriga ter relação sem proteção sabendo que tomo hormônio,sexual,alta,trans_diversificado
+meu marido tirou minha calcinha à força e fotografou rindo,sexual,alta,trans_diversificado
+ele me forçou sexo anal dizendo que era mais natural pra mim,sexual,alta,trans_diversificado
+meu companheiro divulgou que sou trans no grupo dos amigos junto com nudes,sexual,alta,trans_diversificado
+ele me obriga ter relação enquanto chama eu pelo nome morto,sexual,alta,trans_diversificado
+meu namorado me drogou pra ter sexo enquanto eu desmaiada,sexual,alta,trans_diversificado
+ele faz piada do meu corpo trans durante o sexo todo dia,sexual,media,trans_diversificado
+meu marido me obriga assistir pornô trans com ele depois me humilha,sexual,media,trans_diversificado
+ele se masturba enquanto me xinga de aberração no quarto,sexual,media,trans_diversificado
+meu companheiro me obriga a despir de luz acesa pra avaliar minha transição,sexual,alta,trans_diversificado
+meu chefe espalhou no trabalho que sou trans pra eu ser demitida,moral,alta,trans_diversificado
+meu marido fala pra todo mundo que sou travesti pra ninguém me respeitar,moral,alta,trans_diversificado
+ele jura no condomínio que sou homem e devo usar banheiro masculino,moral,alta,trans_diversificado
+meu companheiro chama a polícia pra me constranger dizendo que sou homem se passando,moral,alta,trans_diversificado
+ele me xinga de aberração na frente dos vizinhos,moral,alta,trans_diversificado
+meu marido escreveu cartaz no portão dizendo que tem travesti em casa,moral,alta,trans_diversificado
+ele me chamou de viado de novo na padaria pra todo mundo escutar,moral,media,trans_diversificado
+meu companheiro divulga no whatsapp do prédio que sou trans,moral,alta,trans_diversificado
+ele compartilha foto minha antes da transição nas redes sociais,moral,alta,trans_diversificado
+meu marido divulgou meu nome morto no grupo dos pais da escola,moral,alta,trans_diversificado
+ele me xinga de baitola na frente dos clientes do meu trabalho,moral,alta,trans_diversificado
+meu companheiro espalha no bairro que tive cirurgia de mudança de sexo,moral,media,trans_diversificado
+ele fala pra família dele que tô usando ele financeiramente como travesti,moral,media,trans_diversificado
+meu marido escreve nas redes que tem nojo de ter casado com travesti,moral,alta,trans_diversificado
+ele fala pra clientela dele que sua esposa não é mulher de verdade,moral,alta,trans_diversificado
+meu companheiro liga pra minha empresa dizendo que sou trans pra me sabotar,moral,alta,trans_diversificado
+ele me chamou de monstro genético na frente da família toda no natal,moral,alta,trans_diversificado
+meu marido publicou foto da minha carteira antiga pra envergonhar,moral,alta,trans_diversificado
+ele postou no facebook que paga minhas hormônios e eu sou aproveitadora,moral,media,trans_diversificado
+meu companheiro me chamou de fraude humana em discurso de aniversário,moral,alta,trans_diversificado
+ele me xingou de prostituta travesti no salão da família dele,moral,alta,trans_diversificado
+meu marido jura pra vizinhança que minhas filhas adotivas sofrem ao morar comigo,moral,alta,trans_diversificado
+ele falou pro jornaleiro local que sou homem maquiado,moral,media,trans_diversificado
+meu companheiro espalhou que faço prostituição por ser travesti,moral,alta,trans_diversificado
+ele me xingou de prejuízo pra ciência na frente de médicos amigos,moral,alta,trans_diversificado
+meu marido me roubou todos os hormônios que tava no banheiro,patrimonial,alta,trans_diversificado
+ele destruiu minha caixa de medicação que custou um salário mínimo,patrimonial,alta,trans_diversificado
+meu companheiro vendeu minhas próteses de silicone enquanto eu tava no hospital,patrimonial,alta,trans_diversificado
+ele cortou meu cartão da farmácia pra eu não comprar hormônio,patrimonial,alta,trans_diversificado
+meu marido confiscou meus documentos com nome social retificado,patrimonial,alta,trans_diversificado
+ele rasgou minhas roupas femininas todas dentro de casa,patrimonial,media,trans_diversificado
+meu companheiro escondeu meu RG retificado pra eu não poder votar,patrimonial,alta,trans_diversificado
+ele queimou minhas perucas todas numa briga,patrimonial,media,trans_diversificado
+meu marido se recusou a pagar minha cirurgia de mama mesmo sendo bens em comum,patrimonial,media,trans_diversificado
+ele bloqueou meu acesso à conta conjunta quando comecei tratamento,patrimonial,alta,trans_diversificado
+meu companheiro pegou empréstimo no meu nome usando documentos antigos,patrimonial,alta,trans_diversificado
+ele recusou colocar meu nome social no contrato de aluguel pra me humilhar,patrimonial,media,trans_diversificado
+meu marido vendeu meu carro pra impedir eu ir ao endocrinologista,patrimonial,alta,trans_diversificado
+ele bate o meu rosto contra o espelho onde eu me arrumo,fisica,alta,trans_diversificado
+meu companheiro cortou a internet pra eu não pesquisar sobre transição,patrimonial,baixa,trans_diversificado
+ele se apropria do salário inteiro dizendo que mulher trans gasta demais,patrimonial,alta,trans_diversificado
+meu marido jogou fora todos meus produtos de beleza,patrimonial,media,trans_diversificado
+ele cancelou meu plano de saúde quando soube que eu queria operar,patrimonial,alta,trans_diversificado
+meu companheiro destruiu minhas roupas com tesoura por raiva,patrimonial,media,trans_diversificado
+ele se nega a dar dinheiro pra minha consulta com endocrinologista,patrimonial,media,trans_diversificado
+meu marido cortou minha rede 4G porque eu falo com mulheres trans nas redes,patrimonial,baixa,trans_diversificado
+ele esconde minha bolsa toda hora pra eu não conseguir sair maquiada,patrimonial,baixa,trans_diversificado
+meu companheiro vendeu meu celular novo pra impedir transição online,patrimonial,media,trans_diversificado
+ele se nega a contribuir com cirurgia plástica pós feminização facial,patrimonial,media,trans_diversificado
+meu marido picotou minhas calcinhas todas e jogou no lixo,patrimonial,media,trans_diversificado
+ele me persegue na rua mesmo depois da separação me chamando de macho,stalking,alta,trans_diversificado
+meu ex envia foto minha antes da transição pra todos meus colegas novos,stalking,alta,trans_diversificado
+ele criou conta fake pra postar minha condição trans pra família do meu novo namorado,stalking,alta,trans_diversificado
+meu ex marido fica no portão da clínica de endocrinologia toda consulta,stalking,alta,trans_diversificado
+ele paga gente pra me xingar de travesti em todos os lugares que frequento,stalking,alta,trans_diversificado
+criou perfil no twitter só pra fazer thread sobre minha transição com nome morto,stalking,alta,trans_diversificado
+ele liga pros clientes do meu salão dizendo que sou trans,stalking,alta,trans_diversificado
+meu ex tá perseguindo me chamando de nome morto em público,stalking,alta,trans_diversificado
+ele postou meus documentos antigos nas redes depois que terminei,stalking,alta,trans_diversificado
+tá distribuindo fotos minhas pré-transição no meu bairro,stalking,alta,trans_diversificado
+meu vizinho ficou obcecado em saber se sou trans e me segue todo dia,stalking,media,trans_diversificado
+ele me grava na academia pra postar como prova que sou homem,stalking,alta,trans_diversificado
+um cara da rua descobriu que sou trans e tá fotografando minha rotina,stalking,alta,trans_diversificado
+meu colega de trabalho descobriu minha condição e me persegue com isso,stalking,media,trans_diversificado
+ele criou cinco perfis pra me marcar com nome morto depois que bloqueei,stalking,media,trans_diversificado
+um homem da igreja descobriu que sou trans e tá panfletando o bairro,stalking,alta,trans_diversificado
+ex namorado fica em frente ao consultório do meu psiquiatra,stalking,media,trans_diversificado
+ele liga toda noite e fala meu nome morto até eu desligar,stalking,media,trans_diversificado
+meu ex marido tá enviando flores no trabalho com bilhete falando do meu corpo,stalking,media,trans_diversificado
+ele me filma todo dia entrando no salão de hormonização,stalking,alta,trans_diversificado
+um cara da minha quadra criou grupo pra discutir minha vida trans,stalking,alta,trans_diversificado
+meu ex tá rondando o ambulatório trans toda quarta,stalking,media,trans_diversificado
+ele tá invadindo grupos de mulheres trans pra me cyberbully,stalking,alta,trans_diversificado
+ex companheiro tá pagando jornal local pra publicar minha condição,stalking,alta,trans_diversificado
+ele invadiu meu prontuário médico online pra ver minhas hormônios,stalking,alta,trans_diversificado
+um homem que paquerei sem saber que era trans tá me ameaçando,stalking,alta,trans_diversificado
+meu marido fala que sou apenas imitação de mulher,psicologica,media,trans_diversificado
+ele jura que vou voltar a ser homem quando ficar velha,psicologica,media,trans_diversificado
+meu companheiro me proíbe de falar do passado dele me reconhecer como mulher,psicologica,media,trans_diversificado
+ele finge que tem nojo de mim depois do sexo todo dia,psicologica,media,trans_diversificado
+meu marido se nega a usar palavras femininas comigo,psicologica,media,trans_diversificado
+ele me obriga a esconder meus hormônios da família dele,psicologica,media,trans_diversificado
+meu companheiro fala que sou experimento ambulante,psicologica,alta,trans_diversificado
+ele se irrita quando uso vocabulário feminino sobre meu corpo,psicologica,baixa,trans_diversificado
+meu marido escolheu um quarto separado depois da minha transição,psicologica,media,trans_diversificado
+ele se nega a dormir comigo desde que comecei tratamento,psicologica,media,trans_diversificado
+meu namorado falou que se eu operar ele termina e foge,psicologica,alta,trans_diversificado
+ele me obriga a tirar fotos de homem pra mostrar que ele é hetero,psicologica,alta,trans_diversificado
+meu marido jura que minha menstruação simulada com hormônio é mentira,psicologica,baixa,trans_diversificado
+ele zomba do tamanho do meu seio implantado,psicologica,media,trans_diversificado
+meu companheiro me obriga assistir vídeos sobre como ser feminina pra ele,psicologica,media,trans_diversificado
+ele coleciona vídeos antigos meus pra me chantagear,psicologica,alta,trans_diversificado
+meu marido fala que sou plástico ambulante,psicologica,media,trans_diversificado
+ele se nega a ouvir minha psicóloga trans,psicologica,baixa,trans_diversificado
+meu companheiro proíbe meu cabelo passar de certa altura,psicologica,media,trans_diversificado
+ele me obriga ter saudade do meu nome morto,psicologica,media,trans_diversificado
+meu marido se gabou pros amigos que tá fazendo experimento com travesti em casa,psicologica,alta,trans_diversificado
+ele monitora minhas crises emocionais hormonais pra zoar,psicologica,media,trans_diversificado
+meu namorado falou que se eu retroceder na transição ele me ama,psicologica,alta,trans_diversificado
+ele cria regras de roupas femininas que posso usar e quais não,psicologica,media,trans_diversificado
+meu marido fala que sou caso de psiquiatria não de identidade,psicologica,alta,trans_diversificado
+ele me obriga raspar barba três vezes ao dia mesmo a laser,psicologica,media,trans_diversificado
+meu companheiro me proíbe terapia de voz feminina,psicologica,media,trans_diversificado
+ele me culpa por todos os problemas de saúde mental dele,psicologica,media,trans_diversificado
+meu marido fala que ser travesti é estilo passageiro,psicologica,baixa,trans_diversificado
+ele se recusa a comemorar aniversário da minha transição,psicologica,baixa,trans_diversificado
+meu companheiro fala que vou regredir e voltar ao normal um dia,psicologica,media,trans_diversificado
+ele se sente traído por eu ter escondido transição inicialmente,psicologica,media,trans_diversificado
+meu marido alterna entre amor e ódio dependendo do meu cabelo curto ou longo,psicologica,alta,trans_diversificado
+ele se nega a falar com a equipe médica da minha transição,psicologica,media,trans_diversificado
+meu companheiro fala que travesti é tendência da moda,psicologica,baixa,trans_diversificado

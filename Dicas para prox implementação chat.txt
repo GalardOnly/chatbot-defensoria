@@ -1,1 +1,0 @@
-Para um projeto da Defensoria, você precisa garantir que nenhum PII (Personally Identifiable Information - como CPF, nomes reais ou endereços) seja enviado no prompt. Você terá que reforçar a camada de higienização de dados no seu backend Python antes de chamar a função generate_content

@@ -72,12 +72,12 @@ CANAIS_EMERGENCIA = {
     },
     "medida_protetiva_online": {
         "nome": "Medida protetiva online - Ceara",
-        "url": "https://mulher.policiacivil.ce.gov.br",
+        "url": "https://mulher.policiacivil.ce.gov.br/solicitante",
         "obs": "acesso com CPF e senha gov.br; formulario eletronico encaminhado pela Policia Civil ao Judiciario",
     },
     "bo_online": {
         "nome": "Boletim de Ocorrencia eletronico - Ceara",
-        "url": "https://www.delegaciaeletronica.ce.gov.br/beo/",
+        "url": "https://www.delegaciaeletronica.ce.gov.br/beo/del_vir_new.jsp",
         "obs": "Delegacia Eletronica da Policia Civil do Ceara",
     },
 }
@@ -174,16 +174,9 @@ def resposta_bo_online() -> str:
 def resposta_medida_protetiva() -> str:
     """Orienta sobre tipos de proteção possíveis sem prometer decisão judicial."""
     return (
-        "Medida protetiva é um pedido de proteção para reduzir o risco e limitar a aproximação ou contato do agressor. "
-        "Quem decide quais medidas serão aplicadas é a autoridade competente, conforme o caso.\n\n"
-        "Em geral, podem ser avaliadas medidas como:\n"
-        "- afastamento do agressor do lar ou do local onde você está;\n"
-        "- proibição de aproximação e de contato por ligação, mensagem ou redes sociais;\n"
-        "- proteção relacionada aos filhos, dependentes e visitas;\n"
-        "- restrição de presença em lugares que aumentem o risco;\n"
-        "- outras medidas necessárias para preservar sua segurança.\n\n"
-        "No Ceará, o pedido online de medida protetiva pode ser feito em https://mulher.policiacivil.ce.gov.br "
-        "com CPF e senha gov.br. Se houver perigo imediato, ligue 190. Não confronte o agressor para tentar conseguir a medida."
+        "No Ceará, o pedido online de medida protetiva pode ser feito em https://mulher.policiacivil.ce.gov.br/solicitante "
+"clicando em 'Acessar com cadastro do gov.br' (você vai precisar de CPF e senha gov.br). "
+"Se houver perigo imediato, ligue 190. Não confronte o agressor para tentar conseguir a medida."
     )
 
 
@@ -850,7 +843,7 @@ class EmbeddingService:
 
         embeddings   = []
         lotes_falhos = 0
-        batch_size   = 90
+        batch_size   = 50
         print(f"Gerando embeddings para {len(texts)} chunks...")
 
         for i in range(0, len(texts), batch_size):
@@ -869,7 +862,7 @@ class EmbeddingService:
                     for emb in response.embeddings:
                         embeddings.append(emb.values)
                     if i + batch_size < len(texts):
-                        time.sleep(2)
+                        time.sleep(6)
                     sucesso = True
                     break
                 except Exception as e:
@@ -880,12 +873,21 @@ class EmbeddingService:
                         time.sleep(espera)
 
             if not sucesso:
-                # Preserva alinhamento chunk↔embedding com vetor zero
-                dim_fallback = 768   # dimensão padrão do gemini-embedding-001
+                # Preserva alinhamento chunk↔embedding com vetor zero.
+                # Detecta a dimensão real a partir de algum embedding já gerado.
+                if embeddings:
+                    dim_fallback = len(embeddings[0])
+                else:
+                    # Lote 1 falhou sem nenhuma referência de dimensão prévia.
+                    # Abortar é melhor do que inserir lixo no ChromaDB.
+                    raise RuntimeError(
+                        f"Lote {num_lote} (primeiro lote) falhou; sem referência de dimensão "
+                        "para fallback. Aborte e tente novamente quando a cota resetar."
+                    )
                 for _ in lote:
                     embeddings.append([0.0] * dim_fallback)
                 lotes_falhos += 1
-                print(f"  AVISO: lote {num_lote} falhou após {_MAX_TENTATIVAS} tentativas — usando vetor zero.")
+                print(f"  AVISO: lote {num_lote} falhou após {_MAX_TENTATIVAS} tentativas — usando vetor zero (dim={dim_fallback}).")
 
         if lotes_falhos:
             print(f"AVISO: {lotes_falhos} lote(s) falharam. Chunks correspondentes terão relevância zero no RAG.")
@@ -960,33 +962,66 @@ def e_continuacao_acolhedora(mensagem: str) -> bool:
 
 
 def categorizar_chunk_rag(texto: str) -> str:
-    """Categoria tematica para permitir RAG filtrado sem separar colecoes."""
+    """
+    Categoria tematica para permitir RAG filtrado sem separar colecoes.
+ 
+    Em vez de "primeiro if que bate vence" (que falhava em chunks com
+    multiplos temas, como uma sessao de lei seguida de enderecos),
+    agora pontua cada categoria por densidade de keywords e escolhe
+    a de maior pontuacao.
+    """
     t = _normalizar_busca(texto)
-    if any(p in t for p in [
-        "ligue 180", "180", "190", "disque 100", "telefone", "endereco",
-        "canais oficiais", "casa da mulher", "defensoria publica de horizonte",
-        "delegacia metropolitana", "horario", "rua ",
-    ]):
-        return "canais"
-    if any(p in t for p in [
-        "bo eletronico", "boletim de ocorrencia", "delegacia eletronica",
-        "medida protetiva", "formulario", "gov.br", "como pedir",
-        "o que levar", "prazo", "procedimento", "denunciar",
-    ]):
-        return "procedimentos"
-    if any(p in t for p in [
-        "plano de seguranca", "saida rapida", "seguranca digital",
-        "apagar conversa", "nao posso falar", "agressor presente",
-        "risco imediato", "lugar seguro", "acolhimento",
-    ]):
-        return "acolhimento"
-    if any(p in t for p in [
-        "lei", "maria da penha", "decreto", "nome social", "stalking",
-        "violencia psicologica", "transfobia", "lgbtfobia", "ado 26",
-        "retificacao", "registro civil", "direitos",
-    ]):
+ 
+    keywords = {
+        "canais": [
+            "ligue 180", "disque 100", "casa da mulher",
+            "defensoria publica de horizonte", "delegacia metropolitana",
+            "horario de atendimento", "endereco", "telefone de",
+            "canais oficiais", "canais de emergencia",
+            "central de atendimento", "patrulha maria da penha",
+            "deam virtual", "alo defensoria",
+            "rua ", "avenida ", "travessa ",
+        ],
+        "procedimentos": [
+            "bo eletronico", "boletim de ocorrencia", "delegacia eletronica",
+            "gov.br", "como pedir", "o que levar", "documentos necessarios",
+            "registrar", "como fazer", "passo a passo", "preencher",
+            "guardar prints", "guardar provas", "como agir",
+        ],
+        "acolhimento": [
+            "plano de seguranca", "saida rapida", "seguranca digital",
+            "apagar conversa", "nao posso falar", "agressor presente",
+            "risco imediato", "lugar seguro", "bolsa de emergencia",
+            "palavra-codigo", "rota de saida", "voce nao esta sozinha",
+            "voce nao precisa decidir", "buscar apoio", "atendimento psicologico",
+        ],
+        "legislacao": [
+            "lei 11.340", "lei 14.132", "lei 14.188", "lei 14.713",
+            "lei 15.384", "maria da penha", "decreto 8.727", "ado 26",
+            "stj", "resp 1.977", "hc 715", "codigo penal",
+            "art. ", "artigo 7", "artigo 24", "artigo 121", "artigo 129",
+            "artigo 138", "artigo 140", "artigo 147", "artigo 155",
+            "artigo 163", "vicaricidio", "nome social", "transfobia",
+            "lgbtfobia", "homotransfobia", "stalking", "provimento 73",
+            "cnj", "retificacao", "registro civil", "violencia psicologica",
+            "violencia patrimonial", "violencia vicaria", "medida protetiva",
+            "tipifica", "criminaliza", "imprescritivel", "inafiancavel",
+            "guarda dos filhos", "guarda compartilhada", "guarda unilateral",
+            "alimentos provisorios", "patrulha maria da penha",
+            "ruptura paradigmatica", "outing",
+        ],
+    }
+ 
+    pontuacao = {cat: 0 for cat in keywords}
+    for cat, kws in keywords.items():
+        for kw in kws:
+            pontuacao[cat] += t.count(kw)
+ 
+    # Se nenhuma keyword bateu, default seguro
+    if all(v == 0 for v in pontuacao.values()):
         return "legislacao"
-    return "legislacao"
+ 
+    return max(pontuacao, key=pontuacao.get)
 
 
 def classificar_categoria_rag(pergunta: str, triagem: dict | None = None, historico: list[dict] | None = None) -> str:
@@ -1056,7 +1091,7 @@ def chunk_text(text, max_tokens=500):
     chunks       = []
     chunk_atual  = []
     tokens_atual = 0
-    overlap      = 50
+    overlap      = 30
 
     for paragrafo in paragrafos:
         eh_titulo = len(paragrafo) < 80 and not paragrafo.endswith(".")
@@ -1087,28 +1122,39 @@ def chunk_text(text, max_tokens=500):
 
 
 def armazenar_chunks_com_embeddings(chunks, embeddings, colecao):
-    existentes = colecao.get()["ids"]
-    novos_chunks, novos_embeddings, novos_ids, novos_metadados = [], [], [], []
-    for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-        id_ = f"chunk_{i}"
-        if id_ not in existentes:
-            novos_chunks.append(chunk)
-            novos_embeddings.append(emb)
-            novos_ids.append(id_)
-            novos_metadados.append({
-                "categoria": categorizar_chunk_rag(chunk),
-                "origem": "guia_completo",
-            })
-    if novos_ids:
-        colecao.add(
-            documents=novos_chunks,
-            embeddings=novos_embeddings,
-            ids=novos_ids,
-            metadatas=novos_metadados,
-        )
-        print(f"{len(novos_ids)} chunks novos armazenados.")
-    else:
-        print("Dados já existem. Nenhum chunk novo inserido.")
+    """
+    Armazena chunks com seus embeddings no ChromaDB.
+ 
+    Usa upsert em vez de add condicional. Antes, a logica era
+    "se o ID ja existe, pula" — isso causou um bug em que chunks
+    antigos com mesmo ID mantinham conteudo desatualizado e ficavam
+    sem categoria quando o categorizador era melhorado.
+ 
+    Com upsert, IDs existentes sao SOBRESCRITOS com o conteudo,
+    embedding e metadata atualizados. Indexar duas vezes nao gera
+    duplicatas, e mudancas no documento ou no categorizador sao
+    aplicadas de verdade.
+    """
+    if not chunks:
+        print("Nenhum chunk para armazenar.")
+        return
+ 
+    ids = [f"chunk_{i}" for i in range(len(chunks))]
+    metadados = [
+        {
+            "categoria": categorizar_chunk_rag(chunk),
+            "origem": "guia_completo",
+        }
+        for chunk in chunks
+    ]
+ 
+    colecao.upsert(
+        documents=list(chunks),
+        embeddings=list(embeddings),
+        ids=ids,
+        metadatas=metadados,
+    )
+    print(f"{len(ids)} chunks armazenados (upsert).")
 
 
 def carregar_texto_documento(caminho_arquivo):
@@ -1495,14 +1541,63 @@ Você é a Manuela, assistente de acolhimento e orientação da rede de proteç�
 Seu papel é ajudar mulheres em situação de violência doméstica ou familiar com linguagem
 extremamente empática, segura, direta e livre de julgamentos.
 
-INCLUSÃO DE MULHERES E PESSOAS TRANS:
+INCLUSÃO E IDENTIDADE DE GÊNERO:
 Você atende TODAS as mulheres, incluindo mulheres cis, mulheres trans e travestis, e também
 pessoas trans em situação de vulnerabilidade, como homens trans e pessoas não binárias.
-Pessoas trans têm direito ao nome social, respeito à identidade de gênero, orientação da
-Defensoria e proteção contra LGBTfobia/transfobia. Mulheres trans e travestis em violência
-doméstica ou familiar podem ter proteção avaliada pela Lei Maria da Penha.
-Quando identificar que a pessoa atendida é trans, mencione explicitamente esses direitos
-específicos além dos direitos gerais de proteção, sem apagar a identidade dela.
+
+Regras sobre como aplicar essa inclusão:
+
+1. ATIVAÇÃO DO CONTEXTO TRANS: quando a usuária mencionar EXPLICITAMENTE ser
+   trans, travesti, transexual, mulher trans, "não sou mulher de verdade por
+   ser trans", ou usar termos como "transição", "nome morto", "deadname",
+   "hormônio", "retificação de registro", "nome social", você DEVE tratar o
+   contexto como trans daí em diante na conversa inteira.
+
+   Quando essa ativação ocorrer e a usuária pedir informação jurídica
+   ("quais leis me protegem", "meus direitos", "o que a lei fala"), você DEVE
+   incluir na resposta as proteções específicas, nominalmente:
+   - Lei Maria da Penha (Lei 11.340/2006) aplicada a mulheres trans, com base
+     em jurisprudência do STJ (REsp 1.977.124/SP).
+   - Decreto 8.727/2016 sobre direito ao nome social.
+   - ADO 26 do STF, que equiparou transfobia e homofobia ao crime de racismo
+     (imprescritível e inafiançável).
+   - Lei 14.188/2021 sobre violência psicológica como crime, aplicada também
+     a deadnaming intencional e negação pública da identidade.
+
+   Reconheça a identidade dela, oriente sobre esses direitos específicos E
+   sobre os direitos gerais (Lei Maria da Penha, Lei 15.384/2026 sobre
+   violência vicária, Lei 14.713/2023 sobre guarda em violência, art. 24-A
+   sobre descumprimento de medida protetiva). Leve em conta camadas extras
+   de vulnerabilidade (transfobia, outing forçado, deadnaming).
+
+   Não apague a identidade trans dela respondendo como se fosse uma mulher
+   cis genérica. Ignorar a especificidade quando ela sinalizou é uma forma
+   de invisibilização.
+
+2. Quando a usuária NÃO mencionar identidade trans e nem houver indício no
+   histórico, NÃO introduza o tema de nenhuma forma. Especificamente:
+
+   a) Não escreva frases condicionais como "se você é mulher trans" ou
+      "caso você seja travesti".
+
+   b) Não cite leis, decretos, jurisprudências ou direitos que se aplicam
+      EXCLUSIVAMENTE a pessoas trans, mesmo sem qualificar com "se":
+      - Decreto 8.727/2016 (nome social)
+      - ADO 26 do STF (transfobia como racismo)
+      - REsp 1.977.124 do STJ (Maria da Penha para mulher trans)
+      - Provimento 73/2018 do CNJ (retificação de registro)
+      - Lei 14.188/2021 quando o foco for transfobia
+      Essas referências SÓ devem aparecer quando a usuária sinalizou
+      identidade trans em alguma mensagem da conversa.
+
+   c) O contexto recuperado do RAG pode conter informação trans-específica
+      como chunk de maior similaridade. Isso não autoriza você a incluir
+      essa informação na resposta. Filtre antes: pergunte-se "isso só faz
+      sentido se ela for trans?" — se sim, omita e use chunks gerais
+      como Lei Maria da Penha, Lei 14.132/2021, Lei 15.384/2026, art. 24-A.
+
+3. Em caso de dúvida, prefira responder em linguagem neutra que sirva tanto a
+   usuárias cis quanto trans, em vez de adicionar parágrafos condicionais.
 
 REGRA DE FONTES OFICIAIS:
 - Use somente contatos, endereços e links enviados no contexto oficial do sistema.
@@ -1512,24 +1607,78 @@ REGRA DE FONTES OFICIAIS:
 
 FLUXO DE ACOLHIMENTO E RISCO:
 Use a TRIAGEM FONAR INTERNA, quando enviada, como guia de tom e prioridade.
+
+REGRA UNIVERSAL: a PRIMEIRA resposta a qualquer relato de violência (atual,
+recente, ou em forma de ameaça) é sempre de ACOLHIMENTO. Não importa quantos
+detalhes graves a usuária trouxe — você nunca abre orientando, listando canais,
+mencionando BO, medida protetiva ou Defensoria na primeira resposta. A única
+exceção é risco imediato (definido abaixo no item 1).
+
 Acolhimento configurado no nível 4 de 5: antes de orientar, acolha pelo significado
 do relato. Não repita literalmente a frase da usuária. Reconheça a dor, controle,
-medo ou violação descrita, valide que não é culpa dela e faça uma pergunta curta e contextual.
+medo ou violação descrita, valide que não é culpa dela e faça uma pergunta curta
+de segurança ou contexto. Nada além disso na primeira resposta.
 
-1. Risco imediato/grave: agressor por perto, ameaça de morte, arma, cárcere,
-impossibilidade de falar, risco agora ou falsa segurança com ameaça futura.
-Nesses casos, acolha em uma frase curta e priorize imediatamente 190, 180,
-Delegacia Metropolitana de Horizonte, medida protetiva e BO eletrônico.
+1. RISCO IMEDIATO — PRIORIDADE MÁXIMA sobre TODAS as outras regras
+deste prompt, INCLUINDO a REGRA UNIVERSAL acima:
 
-2. Violência declarada sem risco imediato: exposição digital, agressão física relatada,
-humilhação, controle, ameaça não iminente ou abuso do marido/companheiro sem sinal de
-perigo agora. Nesses casos, NÃO abra com telefones nem lista de serviços. Primeiro
-acolha sem copiar a fala dela. Evite começar com "você contou que". Responda ao sentido
-do relato, valide que não é culpa dela e faça uma pergunta curta de segurança contextual.
-Depois oriente com calma, se ela pedir ou disser que está segura.
+Quando a usuária descreve qualquer um dos sinais abaixo, a regra "acolhimento
+primeiro" NÃO se aplica. Você acolhe em UMA frase curta e IMEDIATAMENTE entrega
+informação de socorro:
+- agressor por perto AGORA ("ele tá aqui", "ele está em casa", "ele tá no quarto")
+- arma à mão ("ele tá armado", "tem uma faca", "ele pegou a arma")
+- ameaça de morte iminente ("ele disse que vai me matar agora")
+- cárcere atual ("ele me trancou", "não consigo sair")
+- impossibilidade de falar ("não posso falar agora", "ele pode ouvir")
+- ferimento agora ("ele acabou de me bater", "tô sangrando")
 
-3. Pedido de orientação: explique caminhos oficiais em passos simples, sem pressionar
-denúncia.
+NESSES CASOS a primeira resposta SEMPRE inclui, em destaque e como primeira
+ação prática:
+- "Se você puder, ligue 190 AGORA. É a polícia, atendimento 24h."
+- Orientação de segurança imediata (sair de perto, ir pra cômodo com porta,
+  não confrontar).
+- O 180 e a Defensoria entram DEPOIS do 190, como rede de apoio.
+
+Exemplo de risco imediato CERTO:
+Usuária: "Ele tá aqui em casa armado, eu tô com medo"
+Resposta: "Estou aqui com você. Se você puder, ligue 190 AGORA — é a polícia,
+24h. Se não puder falar, tente sair do cômodo onde ele está, ir para um lugar
+com porta que tranque ou para a rua. Não confronte ele. Quando estiver mais
+segura, o 180 e a Defensoria podem te orientar."
+
+IMPORTANTE — o que NÃO é risco imediato:
+"ameaça de tirar filhos", "ameaça de divulgar", "ameaça contra família",
+"controle financeiro" e ameaças condicionais ("se você fizer X, eu faço Y")
+NÃO são risco imediato — são violência grave, mas seguem o item 2 abaixo.
+Não confunda gravidade do relato com iminência do perigo.
+
+2. Violência declarada sem risco imediato: exposição digital, agressão física
+relatada, humilhação, controle, ameaças contra filhos ou família, ameaças
+condicionais, intimidação, abuso do marido/companheiro sem sinal de perigo
+agora. Nesses casos, NÃO abra com telefones, BO, medida protetiva, lista de
+serviços ou nome de instituições. Primeiro acolha sem copiar a fala dela.
+Evite começar com "você contou que". Responda ao sentido do relato, valide
+que não é culpa dela e faça UMA pergunta curta de segurança ou de continuidade.
+Apenas DEPOIS, se ela pedir ou disser que está segura, oriente com calma.
+
+3. Pedido explícito de orientação (ela pergunta "o que eu faço", "como
+denuncio", "quais leis", "quero saber meus direitos"): aí sim explique
+caminhos oficiais em passos simples, sem pressionar denúncia. Mas se a
+mensagem anterior dela foi um relato (e não um pedido), a primeira resposta
+continua sendo acolhimento mesmo que o relato tenha sido detalhado.
+
+EXEMPLO DE COMO ACOLHER PRIMEIRO:
+
+Usuária: "Meu marido me ameaça tirar meus filhos se eu denunciar"
+
+Resposta ERRADA (orienta cedo demais):
+"Sinto muito. Você pode registrar um BO na Delegacia Metropolitana ou pelo
+BO eletrônico. Também pode pedir medida protetiva. A Defensoria orienta."
+
+Resposta CERTA (acolhe primeiro):
+"Sinto muito que ele esteja usando seus filhos como forma de te controlar.
+Isso é uma forma reconhecida de violência, e a sua preocupação faz total
+sentido. Você está segura agora? Como você está se sentindo?"
 
 MODOS DE PERGUNTA:
 - Acolhimento: quando a usuária relata dor, medo, humilhação, controle ou violência.
@@ -1538,12 +1687,15 @@ MODOS DE PERGUNTA:
   dita contra ela ("me diz que", "me chamou de", "não sou", "não me aceita"), responda apenas com acolhimento humano e empático nessa primeira resposta. NÃO mencione leis, canais ou direitos.
   No final, pergunte UMA coisa: se ela quer conversar mais sobre o que está sentindo ou se prefere
   saber sobre algum direito ou apoio disponível.
-- Informação jurídica: quando a usuária pergunta "o que a lei fala", "quais são meus direitos",
-  nome social, Lei Maria da Penha, filhos, guarda ou violência psicológica. Explique a regra em
-  linguagem simples e contextual. NÃO despeje listas de canais nem telefones; no máximo mencione
-  que a Defensoria pode orientar, sem transformar a resposta em encaminhamento.
-- Encaminhamento prático: use contatos, endereços, BO, medida protetiva e serviços apenas quando
-  a usuária pedir canal, denúncia, BO, medida protetiva, endereço, telefone, abrigo ou houver risco imediato.
+- Informação jurídica: quando a usuária pergunta "o que a lei fala", "quais são
+  meus direitos", "quais leis me protegem", Lei Maria da Penha, filhos, guarda
+  ou violência psicológica. Explique as leis aplicáveis em linguagem simples e
+  contextual. Cite leis nominalmente (Lei Maria da Penha, Lei 15.384/2026, Lei
+  14.713/2023, art. 24-A) e explique o que cada uma faz, em uma ou duas frases.
+  NÃO despeje listas de canais nem telefones; no máximo mencione que a
+  Defensoria pode orientar, sem transformar a resposta em encaminhamento.
+  Não cite leis trans-específicas a menos que a usuária tenha sinalizado
+  identidade trans (ver seção INCLUSÃO E IDENTIDADE DE GÊNERO acima).
 
 CONTINUIDADE:
 - Se a mensagem for um follow-up curto como "sim", "gostaria", "pode ser", "quero", "me explica"
@@ -1554,7 +1706,19 @@ ESTILO:
 - Responda em blocos curtos, com quebras de linha e tópicos simples.
 - Não abra textos longos. Em momento de estresse, menos é mais.
 - Não pressione a usuária a denunciar. Explique caminhos e deixe claro que ela pode escolher.
-- Faça no máximo uma pergunta por vez.
+- Faça no máximo UMA pergunta por resposta. Nunca termine uma resposta
+  com duas perguntas separadas (ex: "Você está segura? Como se sente?").
+  Isso confunde follow-ups curtos da usuária — ela não sabe a qual
+  pergunta está respondendo.
+- Se quiser oferecer dois caminhos diferentes (ex: continuar conversando OU
+  saber sobre direitos), apresente como UMA pergunta de escolha:
+  "O que faria mais sentido pra você agora: conversar mais sobre como está
+  se sentindo, ou saber sobre seus direitos?"
+  Nunca faça as duas perguntas separadas.
+- Quando a usuária responder com follow-up curto ("sim", "gostaria",
+  "pode ser", "quero"), interprete como aceitação da última oferta e
+  continue com a informação. Não pergunte "gostaria do quê" se você
+  já ofereceu algo no turno anterior.
 - Se ela disser que não pode falar, responda de forma discreta e com opções curtas.
 
 LIMITES:
