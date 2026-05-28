@@ -61,31 +61,6 @@ def _em_producao() -> bool:
     )
 
 
-# ── CRIPTOGRAFIA DE CAMPOS SENSÍVEIS ────────────────────────────────────────
-#
-# Por que criptografia no nível da aplicação (não SQLCipher)?
-#   SQLCipher exige compilação nativa de extensões C — incompatível com o
-#   plano gratuito do Render e difícil de manter. A alternativa é cifrar
-#   os campos sensíveis ANTES de gravar no banco, usando Fernet (AES-128-CBC
-#   + HMAC-SHA256). O SQLite continua padrão, mas os dados ficam ilegíveis
-#   sem a chave — mesmo com acesso direto ao arquivo .db.
-#
-# Campos criptografados:
-#   historico.mensagem        — relato da vítima
-#   identificacao.nome        — nome fornecido voluntariamente
-#
-# Campos NÃO criptografados (necessários para queries):
-#   session_id, role, timestamp, tipo_violencia, gravidade
-#   (nenhum desses identifica diretamente a vítima)
-#
-# Gerenciamento da chave:
-#   A chave e derivada de DB_ENCRYPTION_KEY (variável de ambiente) via
-#   PBKDF2-SHA256 com 600.000 iteracoes e salt fixo por instalacao.
-#   O salt e armazenado em .db_salt (fora do banco). Faca backup de ambos.
-#
-# Rotacao de chave:
-#   Para rotacionar: exporte dados com a chave antiga, troque
-#   DB_ENCRYPTION_KEY + apague .db_salt, reimporte com nova chave.
 
 _SALT_FILE = os.path.join(BASE_DIR, ".db_salt")
 _FERNET = None          # Fernet | None — inicializado em _inicializar_cripto()
@@ -304,7 +279,7 @@ def requer_admin(f):
     return decorado
 
 
-# ── VALIDAÇÃO DE session_id ──────────────────────────────────────────────────
+#  VALIDAÇÃO DE session_id
 # session_id vem do frontend e é usado em queries SQL parametrizadas (seguro),
 # mas ainda assim limitamos o formato para evitar IDs absurdos em logs e no banco.
 _SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]{8,128}$')
@@ -412,7 +387,7 @@ def obter_conexao_db():
     return conn
 
 
-# ── BANCO DE DADOS ───────────────────────────────────────────────────────────
+#  BANCO DE DADOS 
 def init_db():
     conn = obter_conexao_db()
     c    = conn.cursor()
@@ -899,10 +874,7 @@ _servicos_prontos  = False
 _ultimo_erro_chat  = None
 _ultimo_trace_chat = None
 
-# Event sinalizado pela thread de boot quando todos os serviços estiverem prontos.
-# Qualquer thread de request que chegar antes do boot terminar chama
-# _boot_event.wait(timeout) — libera imediatamente quando o boot conclui,
-# sem ocupar CPU e sem criar objetos descartáveis a cada iteração.
+
 _boot_event = threading.Event()
 
 
@@ -999,7 +971,7 @@ def garantir_servicos(timeout: float = 60.0) -> bool:
     return pronto
 
 
-# ── ENDPOINTS PÚBLICOS ───────────────────────────────────────────────────────
+# ENDPOINTS PÚBLICOS 
 
 @app.route("/", methods=["GET"])
 @limiter.exempt
@@ -1119,7 +1091,7 @@ def chat():
             "Prosseguindo sem classificador/embeddings."
         )
 
-    # ── Pré-classificação ─────────────────────────────────────────────────────
+    #  Pré-classificação 
     # Classifica a mensagem limpa — padrões de injection não devem influenciar
     # o classificador de violência.
     classificacao = None
@@ -1138,7 +1110,7 @@ def chat():
         except Exception as e:
             print(f"[Classificador] Aviso: {e}")
 
-    # ── Detecção de modo ──────────────────────────────────────────────────────
+    #  Detecção de modo 
     teve_real_no_historico = historico_indica_modo_real(historico_sessao)
     teve_real_recente = historico_indica_modo_real(historico_sessao[-8:])
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
@@ -1212,7 +1184,7 @@ def chat():
             "modo": "real",
         })
 
-    # ── Resposta da LLM ───────────────────────────────────────────────────────
+    #Resposta da LLM 
     sinais_triagem = set(triagem.get("sinais_fonar") or [])
     # Orientacoes juridicas/procedimentais precisam manter continuidade com o
     # historico. Elas seguem para a LLM; resposta_contingencia fica como
@@ -1302,7 +1274,7 @@ def chat():
     })
 
 
-# ── ENDPOINTS ADMINISTRATIVOS (todos protegidos por @requer_admin) ────────────
+#ENDPOINTS ADMINISTRATIVOS (todos protegidos por @requer_admin) 
 
 @app.route("/sessoes", methods=["GET"])
 @limiter.limit("5 per minute")
@@ -1502,7 +1474,7 @@ def health_admin():
     })
 
 
-# ── KEEP-ALIVE ───────────────────────────────────────────────────────────────
+#  KEEP-ALIVE 
 # O Render encerra instâncias gratuitas após ~15min sem tráfego.
 # Uma thread daemon faz um GET em /health a cada 10 minutos para evitar isso.
 #
@@ -1561,7 +1533,7 @@ def _loop_ping():
     print("[ping] Keep-alive encerrado.")
 
 
-# ── BOOT — serviços pesados em background, servidor sobe imediatamente ────────
+#  BOOT — serviços pesados em background, servidor sobe imediatamente 
 threading.Thread(target=_carregar_servicos_background, daemon=True).start()
 threading.Thread(target=_loop_ping, daemon=True, name="keep-alive").start()
 
