@@ -49,7 +49,7 @@ _PERMITIR_TEXTO_PLANO_LEGADO = os.getenv("ALLOW_LEGACY_PLAINTEXT_DB", "").lower(
 
 
 def _em_producao() -> bool:
-    """Detecta ambientes de deploy onde controles de seguranca devem ser obrigatorios."""
+    """Detecta deploys onde controles de segurança são obrigatórios."""
     ambiente = (
         os.getenv("FLASK_ENV")
         or os.getenv("APP_ENV")
@@ -75,12 +75,8 @@ def _session_id_seguro(session_id: str = "") -> str:
 
 def _inicializar_cripto():
     """
-    Deriva a chave Fernet a partir de DB_ENCRYPTION_KEY + salt persistente.
-    Chamada uma vez no boot. Se DB_ENCRYPTION_KEY nao estiver definida,
-    usa ADMIN_TOKEN como segredo de emergencia para impedir texto plano.
-
-    Salt: gerado uma unica vez e gravado em .db_salt. Deve ser incluido
-    no backup junto com DB_ENCRYPTION_KEY. Sem ambos, dados sao perdidos.
+    Deriva a chave Fernet a partir de DB_ENCRYPTION_KEY e salt persistente.
+    Sem chave dedicada, usa ADMIN_TOKEN para não cair em texto plano.
     """
     global _FERNET, _CRIPTO_ATIVA
 
@@ -124,11 +120,7 @@ def _inicializar_cripto():
 
 
 def cifrar(texto):
-    """
-    Cifra texto com Fernet. Retorna token cifrado como string UTF-8.
-    Se criptografia inativa, devolve texto original (modo degradado).
-    None e tratado como string vazia.
-    """
+    """Cifra texto com Fernet; em modo degradado, preserva o valor original."""
     if texto is None:
         texto = ""
     if not _CRIPTO_ATIVA or _FERNET is None:
@@ -138,10 +130,8 @@ def cifrar(texto):
 
 def decifrar(token, session_id: str = ""):
     """
-    Decifra um token Fernet. Retorna o texto original.
-    Falhas de decifragem nao devolvem o valor bruto por padrao.
-    Para uma migracao pontual de dados legados em texto plano, defina
-    ALLOW_LEGACY_PLAINTEXT_DB=true temporariamente.
+    Decifra token Fernet sem devolver valor bruto em falhas.
+    Texto legado só passa quando ALLOW_LEGACY_PLAINTEXT_DB está ativo.
     """
     if not token:
         return ""
@@ -166,22 +156,11 @@ def decifrar(token, session_id: str = ""):
         return ""
 
 
-# ── AUTENTICAÇÃO ADMINISTRATIVA ──────────────────────────────────────────────
-#
-# Como funciona:
-#   1. Defina ADMIN_TOKEN no seu .env com um valor longo e aleatório.
-#      Gere com: python -c "import secrets; print(secrets.token_hex(32))"
-#   2. Toda requisição a endpoints admin deve enviar o header:
-#      Authorization: Bearer <seu-token>
-#   3. A comparação usa hmac.compare_digest para evitar timing attacks.
-#   4. Se ADMIN_TOKEN não estiver definido no ambiente, o servidor recusa
-#      iniciar — endpoints admin nunca ficam acessíveis sem token.
+# autenticação administrativa
+# ADMIN_TOKEN é obrigatório no boot; endpoint admin sem segredo é falha de configuração.
 
 def _obter_token_admin() -> str:
-    """
-    Lê ADMIN_TOKEN do ambiente. Aborta se ausente ou muito curto.
-    Chamado uma única vez no boot — falha rápida e explícita.
-    """
+    """Lê ADMIN_TOKEN uma vez no boot e falha cedo se estiver inseguro."""
     token = os.getenv("ADMIN_TOKEN", "").strip()
     if not token:
         raise RuntimeError(
@@ -206,20 +185,13 @@ _ADMIN_TOKEN_DIGEST: bytes = hashlib.sha256(ADMIN_TOKEN.encode()).digest()
 
 
 def _token_valido(token_recebido: str) -> bool:
-    """
-    Compara o token recebido com o configurado de forma resistente a timing attack.
-    Ambos os lados são hasheados antes da comparação para equalizar o tamanho,
-    tornando hmac.compare_digest eficaz independentemente do comprimento do input.
-    """
+    """Compara hashes de tamanho fixo para reduzir risco de timing attack."""
     digest_recebido = hashlib.sha256(token_recebido.encode()).digest()
     return hmac.compare_digest(_ADMIN_TOKEN_DIGEST, digest_recebido)
 
 
 def _extrair_bearer(auth_header: str | None) -> str:
-    """
-    Extrai o token do header 'Authorization: Bearer <token>'.
-    Retorna string vazia se o header estiver ausente ou malformado.
-    """
+    """Extrai o token Bearer ou devolve string vazia."""
     if not auth_header:
         return ""
     partes = auth_header.strip().split(" ", 1)
@@ -230,16 +202,8 @@ def _extrair_bearer(auth_header: str | None) -> str:
 
 def requer_admin(f):
     """
-    Decorator que protege um endpoint com autenticação Bearer.
-
-    Uso:
-        @app.route("/sessoes")
-        @requer_admin
-        def sessoes(): ...
-
-    Retorna 401 se o header estiver ausente.
-    Retorna 403 se o token for inválido.
-    Registra toda tentativa de acesso com IP e timestamp para auditoria.
+    Protege endpoints admin com Bearer token.
+    Toda tentativa fica auditável com IP e timestamp.
     """
     @wraps(f)
     def decorado(*args, **kwargs):
@@ -251,7 +215,6 @@ def requer_admin(f):
         token_enviado = _extrair_bearer(auth_header)
 
         if not token_enviado:
-            # Log de tentativa sem token
             print(
                 f"[AUDIT] {timestamp} | ACESSO NEGADO (sem token) | "
                 f"endpoint={endpoint} | ip={ip}"
@@ -262,14 +225,13 @@ def requer_admin(f):
             }), 401
 
         if not _token_valido(token_enviado):
-            # Log de tentativa com token errado — potencial ataque
+            # Token errado fica registrado para investigar força bruta.
             print(
                 f"[AUDIT] {timestamp} | ACESSO NEGADO (token inválido) | "
                 f"endpoint={endpoint} | ip={ip}"
             )
             return jsonify({"erro": "Token inválido ou expirado."}), 403
 
-        # Acesso autorizado — log de auditoria positivo
         print(
             f"[AUDIT] {timestamp} | ACESSO ADMIN AUTORIZADO | "
             f"endpoint={endpoint} | ip={ip}"
@@ -279,7 +241,7 @@ def requer_admin(f):
     return decorado
 
 
-#  VALIDAÇÃO DE session_id
+# validação de session_id
 # session_id vem do frontend e é usado em queries SQL parametrizadas (seguro),
 # mas ainda assim limitamos o formato para evitar IDs absurdos em logs e no banco.
 _SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]{8,128}$')
@@ -387,7 +349,7 @@ def obter_conexao_db():
     return conn
 
 
-#  BANCO DE DADOS 
+# banco de dados
 def init_db():
     conn = obter_conexao_db()
     c    = conn.cursor()
@@ -414,7 +376,7 @@ def init_db():
             sinais_fonar         TEXT
         )
     """)
-    # Tabela de identificação criada aqui — não mais no endpoint /identificar
+    # Criada no boot para /identificar não alterar schema durante request.
     c.execute("""
         CREATE TABLE IF NOT EXISTS identificacao (
             session_id   TEXT PRIMARY KEY,
@@ -430,7 +392,7 @@ def init_db():
             timestamp           TEXT NOT NULL
         )
     """)
-    # Migracoes seguras de schema — novas colunas adicionadas sem quebrar instalacoes antigas
+    # Migrações incrementais para instalações antigas.
     colunas_novas = [
         ("tipo_violencia",       "TEXT"),
         ("gravidade",            "TEXT"),
@@ -483,47 +445,39 @@ def init_db():
 
 def extrair_features(mensagem: str, session_id: str) -> dict:
     """
-    Extrai features booleanas anonimizadas da mensagem ANTES de cifrar.
-
-    Por que extrair antes de cifrar?
-      Criptografar a mensagem impede queries analiticas no banco (nao e possivel
-      fazer SELECT WHERE mensagem LIKE '%arma%' em texto cifrado).
-      Ao extrair features booleanas antes, preservamos capacidade de analise
-      de tendencias e auditoria sem expor o conteudo original.
-
-    As features sao indicadores 0/1 — nunca armazenam texto, apenas presenca/ausencia
-    de padroes. Sao seguras para ficar em colunas nao cifradas.
+    Extrai sinais 0/1 antes da criptografia.
+    Assim ainda há análise agregada sem expor a mensagem original.
     """
     t = (mensagem or "").lower()
 
-    # Mencao a arma ou instrumento de agressao fisica
+    # arma ou instrumento de agressão física
     feat_arma = int(any(p in t for p in [
         "faca", "fak", "arma", "pistola", "revolver", "espingarda",
         "tiro", "bala", "pau", "cinto", "chute", "soco", "estrangul",
         "enforc", "queimou", "queimad",
     ]))
 
-    # Mencao a criancas ou adolescentes no relato
+    # crianças ou adolescentes no relato
     feat_menor = int(any(p in t for p in [
         "filho", "filha", "crianca", "bebe", "bebê", "nenê", "nenê",
         "menor", "adolescente", "escola", "guardiao", "guarda",
     ]))
 
-    # Indica que a vitima quer ou tentou sair da situacao
+    # tentativa ou intenção de sair da situação
     feat_saida = int(any(p in t for p in [
         "quero sair", "quer sair", "foi embora", "saiu de casa", "fugir",
         "fui embora", "largar", "separar", "divorcio", "divorciar",
         "abandonar", "ir embora", "deixar ele", "deixa ele",
     ]))
 
-    # Indicadores de risco iminente ou emergencia
+    # risco iminente ou emergência
     feat_risco = int(any(p in t for p in [
         "socorro", "me mata", "vai me matar", "ameacou matar", "ameaca de morte",
         "estou com medo", "risco de vida", "me bate todo dia", "nao consigo sair",
         "trancada", "presa em casa", "me sequestrou",
     ]))
 
-    # Heuristica de primeiro relato na sessao
+    # primeiro relato da sessão muda a leitura de risco
     conn = obter_conexao_db()
     c    = conn.cursor()
     c.execute("SELECT COUNT(*) FROM historico WHERE session_id = ? AND role = 'user'", (session_id,))
@@ -541,7 +495,7 @@ def extrair_features(mensagem: str, session_id: str) -> dict:
 
 
 def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=None, triagem=None):
-    # 1. Extrair features ANTES de cifrar (so para mensagens do usuario)
+    # Features abertas só são extraídas de mensagens da usuária.
     feats = extrair_features(mensagem, session_id) if role == "user" else {
         "feat_menciona_arma":   0, "feat_menciona_menor":  0,
         "feat_menciona_saida":  0, "feat_risco_imediato":  0,
@@ -561,13 +515,12 @@ def salvar_mensagem(session_id, role, mensagem, tipo_violencia=None, gravidade=N
         if triagem else None
     )
 
-    # 2. Cifrar mensagem
     conn           = obter_conexao_db()
     c              = conn.cursor()
     timestamp      = datetime.now(timezone.utc).isoformat()
     mensagem_salva = cifrar(mensagem)
 
-    # 3. Gravar com features em colunas abertas (nao cifradas)
+    # A mensagem vai cifrada; os sinais FONAR ficam em colunas abertas.
     c.execute(
         """INSERT INTO historico
            (session_id, role, mensagem, timestamp, tipo_violencia, gravidade,
@@ -667,7 +620,7 @@ def _fonar_indica_modo_real(resumo_fonar):
     )
 
 
-# ── DETECÇÃO DE MODO ─────────────────────────────────────────────────────────
+# detecção de modo
 def detectar_modo_local(mensagem):
     texto = (mensagem or "").lower()
     if texto.strip() in {"oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"}:
@@ -772,7 +725,7 @@ Responda apenas: REAL ou FACHADA"""
         return modo_local
 
 
-# ── FLASK APP ────────────────────────────────────────────────────────────────
+# aplicação Flask
 app = Flask(__name__)
 try:
     _MAX_JSON_BYTES = int(os.getenv("MAX_JSON_BYTES", "16384"))
@@ -782,14 +735,8 @@ if _MAX_JSON_BYTES < 4096:
     raise RuntimeError("MAX_JSON_BYTES muito baixo; use pelo menos 4096 bytes.")
 app.config["MAX_CONTENT_LENGTH"] = _MAX_JSON_BYTES
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
-# Permitimos apenas as origens configuradas em ALLOWED_ORIGIN.
-# Em desenvolvimento, defina ALLOWED_ORIGIN=http://localhost:5000 no .env.
-# Em produção, defina ALLOWED_ORIGIN=https://seu-dominio.com
-# No Render, se ALLOWED_ORIGIN nao estiver definida, usamos RENDER_EXTERNAL_URL.
-#
-# Se nenhuma origem segura existir em producao, o servidor falha no boot.
-# Em desenvolvimento, liberamos apenas localhost explicito.
+# CORS só aceita origens explícitas. Em produção, sem origem segura, o boot falha.
+# No Render, RENDER_EXTERNAL_URL é usado como fallback; em dev, apenas localhost.
 _ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").strip()
 _ALLOWED_ORIGINS = [o.strip() for o in _ALLOWED_ORIGIN.split(",") if o.strip()]
 if not _ALLOWED_ORIGINS:
@@ -809,28 +756,15 @@ else:
     CORS(app, origins=_ORIGENS_DEV, supports_credentials=False)
     print(f"[CORS] ALLOWED_ORIGIN ausente; usando origens locais: {', '.join(_ORIGENS_DEV)}")
 
-# ── RATE LIMITING ─────────────────────────────────────────────────────────────
-# Proteção contra abuso do endpoint /chat em duas camadas:
-#
-#   Camada 1 — por IP global:
-#     30 requisições/minuto  — impede burst rápido de um único IP
-#     200 requisições/hora   — impede abuso sustentado ao longo do tempo
-#
-#   Camada 2 — por session_id (chave customizada):
-#     20 requisições/minuto  — uma conversa real não precisa de mais
-#     100 requisições/hora
-#
-# Storage: memory:// funciona para uma instância única (Render free tier).
-# Para múltiplas instâncias, troque por redis://... e adicione REDIS_URL ao .env.
-#
-# Endpoints administrativos têm limite próprio mais restritivo (5/minuto)
-# para dificultar enumeração de sessões e força bruta no token.
-# /health e / são isentos — chamados por monitores e pelo próprio keep-alive.
+# rate limiting
+# /chat é limitado por IP e por session_id. Em uma instância única, memory:// basta;
+# em múltiplas instâncias, precisa trocar para Redis.
+# Admin tem limite mais restritivo; /health e / ficam isentos para monitores.
 
 def _chave_session_ou_ip() -> str:
     """
-    Usa session_id do header como chave de rate limit, sem parsear JSON.
-    O fallback por IP cobre requisicoes sem sessao ou malformadas.
+    Usa session_id do header para rate limit sem parsear JSON.
+    Requisições sem sessão caem no limite por IP.
     """
     sid = request.headers.get("X-Session-Id", "").strip()
     if sid and _SESSION_ID_RE.match(sid):
@@ -895,10 +829,7 @@ def _criar_colecao_rag():
 
 
 def _carregar_servicos_background():
-    """
-    Carrega EmbeddingService + ClassificadorViolencia em thread separada.
-    O servidor Flask sobe ANTES disso terminar — Render detecta a porta sem timeout.
-    """
+    """Carrega serviços pesados em background para o Render ver a porta rápido."""
     global embedding_service, classificador, colecao, _servicos_prontos
 
     with _init_lock:
@@ -945,20 +876,8 @@ def _carregar_servicos_background():
 
 def garantir_servicos(timeout: float = 60.0) -> bool:
     """
-    Bloqueia até os serviços de boot estarem prontos ou o timeout expirar.
-
-    Usa um threading.Event compartilhado sinalizado pela thread de boot.
-    Diferente do busy-wait anterior (que criava um Event descartável a cada
-    iteração e bloqueava a thread de request por até 60s em fatias de 0.5s),
-    esta implementação:
-      - Libera IMEDIATAMENTE quando o boot conclui (sem esperar a próxima fatia)
-      - Não cria objetos descartáveis em loop
-      - Não ocupa CPU durante a espera
-      - Retorna False se o timeout expirar — o caller decide como reagir
-
-    Returns:
-        True  — serviços prontos
-        False — timeout expirado (boot ainda em andamento)
+    Espera o boot via Event compartilhado, sem busy-wait.
+    Se estourar o timeout, o caller decide se usa fallback.
     """
     if _servicos_prontos:
         return True                        # caminho rápido: já prontos
@@ -971,7 +890,7 @@ def garantir_servicos(timeout: float = 60.0) -> bool:
     return pronto
 
 
-# ENDPOINTS PÚBLICOS 
+# endpoints públicos
 
 @app.route("/", methods=["GET"])
 @limiter.exempt
@@ -982,10 +901,8 @@ def index():
 @app.route("/painel", methods=["GET"])
 def painel():
     """
-    Painel administrativo.
-    O HTML é público, mas os dados só carregam com ADMIN_TOKEN via fetch.
-    Isso permite abrir a interface no navegador sem depender de headers
-    customizados na navegação inicial.
+    Serve o HTML do painel; os dados continuam protegidos por ADMIN_TOKEN.
+    Assim a navegação inicial não depende de headers customizados.
     """
     return send_from_directory(BASE_DIR, "painel.html")
 
@@ -1010,16 +927,14 @@ def chat():
     if not mensagem:
         return jsonify({"erro": "Campo mensagem obrigatório."}), 400
 
-    # Validação do session_id — rejeita IDs malformados
+    # session_id malformado polui logs e banco, mesmo com SQL parametrizado.
     if not session_id_valido(session_id):
         return jsonify({
             "erro": "session_id inválido.",
             "detalhe": "Use entre 8 e 128 caracteres alfanuméricos, hífen ou underscore."
         }), 400
 
-    # Limite de tamanho da mensagem — rejeita payloads absurdamente grandes
-    # antes de qualquer processamento (classificação, LLM, banco).
-    # 2000 chars ≈ ~500 tokens, suficiente para qualquer relato real.
+    # Antes de LLM/banco, barramos payload grande demais para um relato real.
     token_sessao = request.headers.get("X-Session-Token", "").strip()
     if not token_delecao_valido(session_id, token_sessao):
         return jsonify({"erro": "Token de sessao obrigatorio ou invalido."}), 403
@@ -1030,9 +945,7 @@ def chat():
             "detalhe": "Máximo de 2000 caracteres por mensagem."
         }), 400
 
-    # Sanitização prévia — detecta injection antes de salvar no banco.
-    # Salvamos a mensagem original no banco (para auditoria humana),
-    # mas usamos a versão limpa em todas as operações subsequentes.
+    # O banco guarda o original cifrado; o restante do fluxo usa a versão limpa.
     mensagem_limpa, alertas = sanitizar_mensagem(mensagem, session_id)
 
     historico_anterior = carregar_historico(session_id)
@@ -1083,17 +996,15 @@ def chat():
     )   # banco recebe original cifrado e metadados FONAR anonimizados
     historico_sessao = carregar_historico(session_id)
 
-    # O boot de embeddings/classificador roda em background. Não bloqueamos a
-    # conversa esperando RAG ficar pronto; o código abaixo já trata serviços None.
+    # Não bloqueamos a conversa esperando RAG; os fallbacks já cobrem serviços None.
     if not _servicos_prontos:
         print(
             f"[chat] Boot ainda em andamento para session={_session_id_seguro(session_id)}. "
             "Prosseguindo sem classificador/embeddings."
         )
 
-    #  Pré-classificação 
-    # Classifica a mensagem limpa — padrões de injection não devem influenciar
-    # o classificador de violência.
+    # pré-classificação
+    # Injection sanitizada não deve influenciar o classificador de violência.
     classificacao = None
     if classificador:
         try:
@@ -1110,7 +1021,7 @@ def chat():
         except Exception as e:
             print(f"[Classificador] Aviso: {e}")
 
-    #  Detecção de modo 
+    # detecção de modo
     teve_real_no_historico = historico_indica_modo_real(historico_sessao)
     teve_real_recente = historico_indica_modo_real(historico_sessao[-8:])
     classificacao_indica_real = classificacao is not None and classificacao["eh_violencia"]
@@ -1184,12 +1095,12 @@ def chat():
             "modo": "real",
         })
 
-    #Resposta da LLM 
+    # resposta da LLM
     sinais_triagem = set(triagem.get("sinais_fonar") or [])
-    # Orientacoes juridicas/procedimentais precisam manter continuidade com o
-    # historico. Elas seguem para a LLM; resposta_contingencia fica como
+    # Orientações jurídicas/procedimentais precisam manter continuidade com o
+    # histórico. Elas seguem para a LLM; resposta_contingencia fica como
     # fallback se a chamada falhar. Respostas fixas ficam reservadas para
-    # saudacao, risco imediato e primeiro acolhimento de seguranca.
+    # saudação, risco imediato e primeiro acolhimento de segurança.
     acoes_deterministicas = set()
     if triagem.get("acao_resposta") in acoes_deterministicas:
         trace_chat["resposta_origem"] = f"fallback_{triagem.get('acao_resposta')}"
@@ -1266,7 +1177,7 @@ def chat():
     resposta = normalizar_resposta_publica(resposta)
     salvar_mensagem(session_id, "assistant", resposta)
 
-    # Retornamos apenas o necessário para o frontend — dados internos de
+    # Retorna só o necessário para o frontend; dados internos de
     # classificação (tipo_prob, gravidade_prob) ficam de fora da resposta pública.
     return jsonify({
         "resposta": resposta,
@@ -1274,7 +1185,7 @@ def chat():
     })
 
 
-#ENDPOINTS ADMINISTRATIVOS (todos protegidos por @requer_admin) 
+# endpoints administrativos
 
 @app.route("/sessoes", methods=["GET"])
 @limiter.limit("5 per minute")
@@ -1342,7 +1253,7 @@ def _salvar_identificacao(exigir_token_sessao: bool = False):
         return jsonify({"erro": "Dados incompletos."}), 400
     if not session_id_valido(session_id):
         return jsonify({"erro": "session_id inválido."}), 400
-    # Limite de tamanho no nome para evitar entradas abusivas
+    # Nome grande demais aqui é entrada abusiva, não caso de uso real.
     if exigir_token_sessao:
         token_sessao = request.headers.get("X-Session-Token", "").strip()
         if not token_delecao_valido(session_id, token_sessao):
@@ -1474,37 +1385,20 @@ def health_admin():
     })
 
 
-#  KEEP-ALIVE 
-# O Render encerra instâncias gratuitas após ~15min sem tráfego.
-# Uma thread daemon faz um GET em /health a cada 10 minutos para evitar isso.
-#
-# Por que thread + loop em vez de threading.Timer recursivo?
-#   - Timer recursivo cria um objeto novo a cada ciclo, mesmo em falha.
-#     Se o servidor externo ficar offline por horas, centenas de Timers
-#     acumulam em memória sem nunca serem coletados.
-#   - Não há como parar ou inspecionar Timers já agendados.
-#   - Uma thread daemon com loop + Event.wait() usa um único objeto,
-#     pode ser interrompida imediatamente via _ping_stop.set(),
-#     e limita falhas consecutivas antes de desistir.
+# keep-alive
+# No plano gratuito do Render, uma thread daemon pinga /health periodicamente.
+# Usamos loop com Event para reaproveitar o mesmo objeto e parar de forma limpa.
 
-_ping_stop = threading.Event()   # sinalizar para parar o loop de ping
+_ping_stop = threading.Event()
 
-_PING_INTERVALO   = 600    # segundos entre pings (10 min)
-_PING_MAX_FALHAS  = 10     # para de tentar após N falhas consecutivas
+_PING_INTERVALO   = 600    # 10 minutos
+_PING_MAX_FALHAS  = 10     # desiste após falhas consecutivas
 
 
 def _loop_ping():
     """
-    Thread daemon que mantém o servidor ativo no Render free tier.
-
-    Comportamento:
-      - Aguarda _PING_INTERVALO segundos entre cada ping usando Event.wait()
-        (liberado imediatamente se _ping_stop for sinalizado).
-      - Conta falhas consecutivas. Após _PING_MAX_FALHAS seguidas, encerra
-        a thread com aviso — evita loop infinito em caso de má configuração.
-      - Falha isolada não incrementa contador (reseta em sucesso).
-      - Não cria nenhum objeto novo por ciclo — usa a mesma thread e o
-        mesmo Event durante toda a vida do processo.
+    Mantém o servidor acordado no Render free tier.
+    Falhas consecutivas encerram o loop para evitar ruído infinito.
     """
     url = os.getenv("RENDER_EXTERNAL_URL", "").strip()
     if not url:
@@ -1533,7 +1427,7 @@ def _loop_ping():
     print("[ping] Keep-alive encerrado.")
 
 
-#  BOOT — serviços pesados em background, servidor sobe imediatamente 
+# boot em background
 threading.Thread(target=_carregar_servicos_background, daemon=True).start()
 threading.Thread(target=_loop_ping, daemon=True, name="keep-alive").start()
 

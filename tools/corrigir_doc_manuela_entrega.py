@@ -121,7 +121,7 @@ def main():
                 for paragraph in cell.paragraphs:
                     replace_in_paragraph(paragraph, REPLACEMENTS)
 
-    # Safety metadata: avoid personal author metadata in the deliverable copy.
+    # Remove metadados pessoais da cópia entregue.
     props = doc.core_properties
     props.author = ""
     props.last_modified_by = ""

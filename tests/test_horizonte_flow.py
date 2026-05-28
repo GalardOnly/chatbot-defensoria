@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def _instalar_stubs_conteudo_chat():
-    """Permite importar conteudo_chat em ambiente de teste sem dependencias pesadas."""
+    """Permite importar conteudo_chat sem dependências pesadas nos testes."""
     sys.modules.setdefault("joblib", types.SimpleNamespace(load=lambda *_args, **_kwargs: None))
     sys.modules.setdefault("numpy", types.SimpleNamespace(argmax=lambda _values: 0))
     sys.modules.setdefault("requests", types.SimpleNamespace(post=lambda *_args, **_kwargs: None))

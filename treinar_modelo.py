@@ -31,8 +31,8 @@ COLUNAS_OBRIGATORIAS = {"texto", "tipo", "gravidade"}
 
 def carregar_dataset_treinamento() -> tuple[pd.DataFrame, list[str]]:
     """
-    Usa o dataset unificado quando ele existe. Ele ja consolida violencia contra
-    mulheres, violencia contra pessoas trans, stalking e exemplos de esconderijo.
+    Usa o dataset unificado quando existe.
+    Ele já consolida violência doméstica, transfobia, stalking e fachada.
     """
     if os.path.exists("dataset_unificado.csv"):
         print("Carregando dataset_unificado.csv...")

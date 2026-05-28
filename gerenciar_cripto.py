@@ -1,13 +1,7 @@
 """
-gerenciar_cripto.py — Utilitário de criptografia do banco de dados.
-
-Comandos disponíveis:
-    python gerenciar_cripto.py migrar       — cifra dados legados em texto plano
-    python gerenciar_cripto.py verificar    — verifica se todos os campos estão cifrados
-    python gerenciar_cripto.py rotacionar   — troca a chave de criptografia
-
-Antes de qualquer operação, defina DB_ENCRYPTION_KEY no .env ou no ambiente.
-Para rotacionar, defina também DB_ENCRYPTION_KEY_NOVA.
+Utilitário para migrar, verificar e rotacionar a criptografia do banco.
+Uso: python gerenciar_cripto.py [migrar|verificar|rotacionar].
+Defina DB_ENCRYPTION_KEY; para rotacionar, também DB_ENCRYPTION_KEY_NOVA.
 """
 
 import os
@@ -27,7 +21,7 @@ SALT_FILE = os.path.join(BASE_DIR, ".db_salt")
 DB_PATH   = os.path.join(BASE_DIR, "historico.db")
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# utilidades
 
 def _derivar_fernet(senha_env: str, salt_file: str, criar_salt: bool = False) -> Fernet:
     senha = os.getenv(senha_env, "").strip().encode()
@@ -61,20 +55,17 @@ def _decifrar_seguro(fernet: Fernet, valor: str) -> str | None:
         return None
 
 
-# ── Comando: migrar ───────────────────────────────────────────────────────────
+# migração de dados legados
 
 def cmd_migrar():
-    """
-    Cifra todos os registros que ainda estão em texto plano.
-    Seguro para rodar múltiplas vezes — registros já cifrados são ignorados.
-    """
+    """Cifra registros em texto plano; registros já cifrados são ignorados."""
     print("\n── MIGRAÇÃO: cifrando dados legados ──────────────────────────────")
     fernet = _derivar_fernet("DB_ENCRYPTION_KEY", SALT_FILE)
 
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
 
-    # historico.mensagem
+    # mensagens do histórico
     c.execute("SELECT id, mensagem FROM historico")
     rows     = c.fetchall()
     migrados = 0
@@ -90,7 +81,7 @@ def cmd_migrar():
 
     print(f"  historico.mensagem   — {migrados} cifrados, {pulados} já cifrados")
 
-    # identificacao.nome
+    # nomes de identificação
     c.execute("SELECT session_id, nome FROM identificacao")
     rows     = c.fetchall()
     migrados = 0
@@ -111,20 +102,17 @@ def cmd_migrar():
     print("\n  Migração concluída. Reinicie o servidor.")
 
 
-# ── Comando: verificar ────────────────────────────────────────────────────────
+# verificação de criptografia
 
 def cmd_verificar():
-    """
-    Verifica quantos registros estão cifrados vs. texto plano.
-    Não modifica dados.
-    """
+    """Conta registros cifrados e em texto plano sem modificar dados."""
     print("\n── VERIFICAÇÃO do estado de criptografia ─────────────────────────")
     fernet = _derivar_fernet("DB_ENCRYPTION_KEY", SALT_FILE)
 
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
 
-    # historico
+    # histórico
     c.execute("SELECT COUNT(*) FROM historico")
     total_hist = c.fetchone()[0]
     c.execute("SELECT mensagem FROM historico")
@@ -134,7 +122,7 @@ def cmd_verificar():
     print(f"    Cifrados    : {cifrados}")
     print(f"    Texto plano : {plano}  {'← rode migrar' if plano else '(ok)'}")
 
-    # identificacao
+    # identificação
     c.execute("SELECT COUNT(*) FROM identificacao")
     total_id = c.fetchone()[0]
     c.execute("SELECT nome FROM identificacao")
@@ -144,7 +132,7 @@ def cmd_verificar():
     print(f"    Cifrados    : {cifrados}")
     print(f"    Texto plano : {plano}  {'← rode migrar' if plano else '(ok)'}")
 
-    # Teste de decifracao com amostra sem expor conteudo sensivel.
+    # Teste de decifração com amostra sem expor conteúdo sensível.
     c.execute("SELECT mensagem FROM historico WHERE mensagem LIKE 'gAAAAA%' LIMIT 3")
     amostras = c.fetchall()
     if amostras:
@@ -161,21 +149,12 @@ def cmd_verificar():
     print()
 
 
-# ── Comando: rotacionar ───────────────────────────────────────────────────────
+# rotação de chave
 
 def cmd_rotacionar():
     """
-    Re-cifra todos os registros da chave antiga para a nova.
-
-    Requer:
-      DB_ENCRYPTION_KEY      — chave ATUAL (para decifrar)
-      DB_ENCRYPTION_KEY_NOVA — chave NOVA  (para cifrar)
-
-    O salt antigo é mantido para a chave atual e um novo salt é gerado
-    para a chave nova, salvo em .db_salt_nova. Após confirmar sucesso:
-      1. Substitua .db_salt por .db_salt_nova
-      2. Mude DB_ENCRYPTION_KEY para o valor de DB_ENCRYPTION_KEY_NOVA
-      3. Reinicie o servidor
+    Re-cifra os registros da chave atual para DB_ENCRYPTION_KEY_NOVA.
+    O salt novo fica em .db_salt_nova até a troca ser confirmada.
     """
     print("\n── ROTAÇÃO DE CHAVE ──────────────────────────────────────────────")
 
@@ -200,7 +179,7 @@ def cmd_rotacionar():
         for pk, valor in rows:
             if not valor:
                 continue
-            # Decifrar com chave antiga (ou usar texto plano legado)
+            # Aceita texto plano legado durante a rotação.
             if _eh_cifrado(valor):
                 texto = _decifrar_seguro(fernet_ant, valor)
                 if texto is None:
@@ -235,7 +214,7 @@ def cmd_rotacionar():
     )
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# entrada CLI
 
 COMANDOS = {
     "migrar":    cmd_migrar,

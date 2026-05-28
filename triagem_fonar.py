@@ -41,10 +41,8 @@ def _resultado(
 
 def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> dict:
     """
-    Triagem inspirada nos fatores do FONAR para calibrar resposta e estatisticas.
-
-    Nao substitui a aplicacao oficial do FONAR por profissional habilitado. No chat,
-    esta camada serve para separar acolhimento, orientacao e emergencia imediata.
+    Triagem inspirada no FONAR para calibrar resposta e estatísticas.
+    Não substitui avaliação profissional.
     """
     t = _normalizar(texto)
     historico = historico or []
@@ -625,7 +623,7 @@ def avaliar_triagem_fonar(texto: str, historico: list[dict] | None = None) -> di
 
 
 def avaliar_emergencia_obvia(texto: str) -> bool:
-    """Cinto de seguranca local: apenas casos que nao podem esperar LLM."""
+    """Atalho local para casos que não podem esperar a LLM."""
     t = _normalizar(texto)
 
     perigo_declarado = _tem(t, [
@@ -668,11 +666,8 @@ def triagem_indica_modo_real(triagem: dict) -> bool:
 
 def historico_indica_modo_real(historico: list[dict] | None) -> bool:
     """
-    Decide se a sessao ja entrou em contexto sensivel usando metadados salvos.
-
-    O classificador RF pode estar ausente ou nao reconhecer um relato sutil. Nesses
-    casos, os campos FONAR gravados no banco precisam preservar o estado real da
-    conversa para que uma saudacao ou termo domestico nao devolva o bot a fachada.
+    Usa metadados FONAR para manter a sessão em contexto sensível.
+    Isso evita voltar à fachada por saudação ou termo doméstico isolado.
     """
     sinais_reais = {
         "possivel_controle_domestico",
